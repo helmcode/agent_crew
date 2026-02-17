@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { generateId } from '../utils/id';
 
 export interface ToastMessage {
   id: string;
@@ -16,7 +17,7 @@ export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const addToast = useCallback((msg: Omit<ToastMessage, 'id'>) => {
-    const id = crypto.randomUUID();
+    const id = generateId();
     setToasts((prev) => [...prev, { ...msg, id }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));

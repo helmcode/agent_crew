@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { AgentRole, CreateTeamRequest } from '../types';
 import { teamsApi } from '../services/api';
 import { toast } from '../components/Toast';
+import { generateId } from '../utils/id';
 
 const RUNTIMES = [
   { value: 'docker', label: 'Docker' },
@@ -33,12 +34,12 @@ export function TeamBuilderPage() {
 
   // Step 2: Agents
   const [agents, setAgents] = useState<AgentDraft[]>([
-    { id: crypto.randomUUID(), name: '', role: 'leader', specialty: '', system_prompt: '', skills: [] },
+    { id: generateId(), name: '', role: 'leader', specialty: '', system_prompt: '', skills: [] },
   ]);
   const [skillInput, setSkillInput] = useState<Record<number, string>>({});
 
   function addAgent() {
-    setAgents([...agents, { id: crypto.randomUUID(), name: '', role: 'worker', specialty: '', system_prompt: '', skills: [] }]);
+    setAgents([...agents, { id: generateId(), name: '', role: 'worker', specialty: '', system_prompt: '', skills: [] }]);
   }
 
   function removeAgent(index: number) {

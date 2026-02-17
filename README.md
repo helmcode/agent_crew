@@ -1,73 +1,112 @@
-# React + TypeScript + Vite
+# AgentCrew Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Web UI for managing multi-agent AI teams. Build, configure, deploy, and monitor teams of AI agents running on Docker or Kubernetes.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **React 19** with TypeScript
+- **Vite 7** for bundling and dev server
+- **Tailwind CSS 4** for styling
+- **React Router 6** for client-side routing
+- **Vitest** for unit and integration testing
+- **Testing Library** for component tests
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Team Builder** — Step-by-step wizard to create agent teams with Docker or Kubernetes runtime selection
+- **Team Monitor** — Real-time activity feed via WebSocket, agent status overview, and chat interface
+- **Teams List** — Dashboard showing all teams with status badges, deploy/stop controls
+- **Settings** — Key-value configuration management for the API
+- **Runtime Support** — Visual distinction between Docker and Kubernetes teams throughout the UI
 
-## Expanding the ESLint configuration
+## Quick Start
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Prerequisites
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Node.js 20+
+- npm
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Development
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# Install dependencies
+npm install
+
+# Copy environment variables
+cp .env.example .env
+
+# Start dev server (default: http://localhost:5173)
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The frontend expects the AgentCrew API running at the URL specified in `VITE_API_URL` (defaults to `http://localhost:3000`).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Docker Compose
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+From the project root (`../`):
+
+```bash
+docker compose up
 ```
+
+This starts the full stack:
+- **NATS** message broker on port 4222
+- **API** backend on port 3000
+- **Frontend** on port 8080
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_API_URL` | Backend API base URL | `http://localhost:3000` |
+
+## Project Structure
+
+```
+src/
+  pages/           # Route-level page components
+    TeamsListPage    # Teams dashboard
+    TeamBuilderPage  # Team creation wizard
+    TeamMonitorPage  # Real-time team monitoring
+    SettingsPage     # Settings management
+  components/      # Reusable UI components
+    Layout           # App shell with navigation
+    StatusBadge      # Status indicator badges
+    LoadingSkeleton  # Loading placeholders
+    EmptyState       # Empty state illustrations
+    Toast            # Toast notification system
+  services/        # API and WebSocket clients
+    api.ts           # REST API client (teams, agents, chat, settings)
+    websocket.ts     # WebSocket client with auto-reconnect
+  types/           # TypeScript type definitions
+    index.ts         # Shared interfaces and types
+  test/            # Test utilities and mocks
+    mocks.ts         # Mock data for tests
+    setup.ts         # Vitest setup
+```
+
+## Available Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Type-check and build for production |
+| `npm run preview` | Preview production build locally |
+| `npm run lint` | Run ESLint |
+| `npm test` | Run unit tests |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run test:coverage` | Run tests with coverage report |
+| `npm run test:integration` | Run integration tests |
+
+## API Integration
+
+The frontend connects to the AgentCrew API via:
+
+- **REST API** (`services/api.ts`) — CRUD operations for teams, agents, settings, and chat
+- **WebSocket** (`services/websocket.ts`) — Real-time activity stream with exponential backoff reconnection
+
+All API calls go through a centralized `request()` function that handles errors, JSON parsing, and the base URL configuration.
+
+## License
+
+See the repository root for license information.

@@ -128,11 +128,13 @@ export function TeamMonitorPage() {
           <p className="mb-2 text-xs text-slate-400">{team.description || 'No description'}</p>
           <StatusBadge status={team.status} />
           <div className="mt-2 text-xs text-slate-500">
-            <span className="font-mono">{team.runtime}</span>
+            <span className="font-mono">{team.runtime === 'kubernetes' ? '☸️' : '🐳'} {team.runtime}</span>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-          <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-500">Agents</h3>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-500">
+            {team.runtime === 'kubernetes' ? 'Pod Status' : 'Container Status'}
+          </h3>
           {team.agents && team.agents.length > 0 ? (
             <div className="space-y-2">
               {team.agents.map((agent) => {

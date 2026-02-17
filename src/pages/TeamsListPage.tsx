@@ -100,7 +100,7 @@ export function TeamsListPage() {
             </p>
             <div className="mb-4 flex items-center gap-4 text-xs text-slate-500">
               <span>{team.agents?.length ?? 0} agents</span>
-              <span className="font-mono">{team.runtime}</span>
+              <span className="font-mono">{team.runtime === 'kubernetes' ? '☸️' : '🐳'} {team.runtime}</span>
             </div>
             <div className="flex items-center gap-2">
               <button

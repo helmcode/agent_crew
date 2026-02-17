@@ -39,6 +39,20 @@ export const mockRunningTeam: Team = {
   ],
 };
 
+export const mockK8sTeam: Team = {
+  ...mockTeam,
+  id: 'team-uuid-3',
+  name: 'k8s-team',
+  description: 'A Kubernetes-based agent team',
+  runtime: 'kubernetes',
+  workspace_path: '/workspace',
+  status: 'running',
+  agents: [
+    { ...mockAgent, id: 'agent-uuid-3', name: 'k8s-leader', container_status: 'running' },
+    { ...mockAgent, id: 'agent-uuid-4', name: 'k8s-worker', role: 'worker', container_status: 'running' },
+  ],
+};
+
 export const mockTaskLog: TaskLog = {
   id: 'log-uuid-1',
   team_id: 'team-uuid-1',

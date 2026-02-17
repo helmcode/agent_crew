@@ -6,6 +6,7 @@ import { toast } from '../components/Toast';
 
 const RUNTIMES = [
   { value: 'docker', label: 'Docker' },
+  { value: 'kubernetes', label: 'Kubernetes' },
 ];
 
 interface AgentDraft {
@@ -171,6 +172,9 @@ export function TeamBuilderPage() {
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               placeholder="/path/to/workspace"
             />
+            <p className="mt-1 text-xs text-slate-500">
+              {runtime === 'kubernetes' ? 'Mount path in pod' : 'Container working directory'}
+            </p>
           </div>
         </div>
       )}
@@ -285,7 +289,7 @@ export function TeamBuilderPage() {
               <dt className="text-slate-500">Description</dt>
               <dd className="text-white">{description || '-'}</dd>
               <dt className="text-slate-500">Runtime</dt>
-              <dd className="font-mono text-white">{runtime}</dd>
+              <dd className="font-mono text-white">{runtime === 'kubernetes' ? '☸️' : '🐳'} {RUNTIMES.find((r) => r.value === runtime)?.label ?? runtime}</dd>
               <dt className="text-slate-500">Workspace</dt>
               <dd className="font-mono text-white">{workspacePath || '-'}</dd>
             </dl>

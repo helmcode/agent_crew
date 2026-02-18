@@ -5,11 +5,6 @@ import { teamsApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { generateId } from '../utils/id';
 
-const RUNTIMES = [
-  { value: 'docker', label: 'Docker' },
-  { value: 'kubernetes', label: 'Kubernetes' },
-];
-
 interface AgentDraft {
   id: string;
   name: string;
@@ -33,7 +28,6 @@ export function TeamBuilderPage() {
   // Step 1: Team config
   const [teamName, setTeamName] = useState('');
   const [description, setDescription] = useState('');
-  const [runtime, setRuntime] = useState(RUNTIMES[0].value);
   const [workspacePath, setWorkspacePath] = useState('');
 
   // Step 2: Agents
@@ -81,7 +75,6 @@ export function TeamBuilderPage() {
       const teamReq: CreateTeamRequest = {
         name: teamName.trim(),
         description: description.trim() || undefined,
-        runtime,
         workspace_path: workspacePath.trim() || undefined,
         agents: agents.map((a, i) => ({
           name: a.name.trim(),
@@ -159,18 +152,6 @@ export function TeamBuilderPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Runtime</label>
-            <select
-              value={runtime}
-              onChange={(e) => setRuntime(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-            >
-              {RUNTIMES.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label className="mb-1 block text-sm font-medium text-slate-300">Workspace Path</label>
             <input
               value={workspacePath}
@@ -178,9 +159,7 @@ export function TeamBuilderPage() {
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               placeholder="/path/to/workspace"
             />
-            <p className="mt-1 text-xs text-slate-500">
-              {runtime === 'kubernetes' ? 'Mount path in pod' : 'Container working directory'}
-            </p>
+            <p className="mt-1 text-xs text-slate-500">Working directory for the agents</p>
           </div>
         </div>
       )}
@@ -292,8 +271,6 @@ export function TeamBuilderPage() {
               <dd className="text-white">{teamName}</dd>
               <dt className="text-slate-500">Description</dt>
               <dd className="text-white">{description || '-'}</dd>
-              <dt className="text-slate-500">Runtime</dt>
-              <dd className="font-mono text-white">{runtime === 'kubernetes' ? '☸️' : '🐳'} {RUNTIMES.find((r) => r.value === runtime)?.label ?? runtime}</dd>
               <dt className="text-slate-500">Workspace</dt>
               <dd className="font-mono text-white">{workspacePath || '-'}</dd>
             </dl>
@@ -328,7 +305,6 @@ export function TeamBuilderPage() {
                 {
                   name: teamName,
                   description: description || undefined,
-                  runtime,
                   workspace_path: workspacePath || undefined,
                   agents: agents.map((a, i) => ({
                     name: a.name,

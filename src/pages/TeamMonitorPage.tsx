@@ -44,7 +44,10 @@ export function TeamMonitorPage() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const activityEndRef = useRef<HTMLDivElement>(null);
+  const activityContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [activityAutoScroll, setActivityAutoScroll] = useState(true);
 
   const fetchTeam = useCallback(async () => {
     try {
@@ -58,7 +61,12 @@ export function TeamMonitorPage() {
   // Initial data load
   useEffect(() => {
     fetchTeam();
-    messagesApi.list(teamId).then((data) => setMessages(data ?? [])).catch(() => {});
+    messagesApi.list(teamId).then((data) => {
+      const sorted = (data ?? []).sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+      setMessages(sorted);
+    }).catch(() => {});
     const interval = setInterval(fetchTeam, 10000);
     return () => clearInterval(interval);
   }, [teamId, fetchTeam]);
@@ -76,16 +84,24 @@ export function TeamMonitorPage() {
     return disconnect;
   }, [teamId]);
 
-  // Auto-scroll chat
+  // Auto-scroll chat and activity panels
   useEffect(() => {
     if (autoScroll) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, autoScroll]);
+    if (activityAutoScroll) activityEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, autoScroll, activityAutoScroll]);
 
   function handleChatScroll() {
     const el = chatContainerRef.current;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     setAutoScroll(atBottom);
+  }
+
+  function handleActivityScroll() {
+    const el = activityContainerRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    setActivityAutoScroll(atBottom);
   }
 
   async function handleSend() {
@@ -275,7 +291,11 @@ export function TeamMonitorPage() {
               </select>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 font-mono text-sm">
+          <div
+            ref={activityContainerRef}
+            onScroll={handleActivityScroll}
+            className="flex-1 overflow-y-auto p-4 font-mono text-sm"
+          >
             {filteredMessages.length === 0 ? (
               <p className="text-center text-sm text-slate-500">No activity yet</p>
             ) : (
@@ -300,6 +320,7 @@ export function TeamMonitorPage() {
                 </div>
               ))
             )}
+            <div ref={activityEndRef} />
           </div>
         </div>
       </div>

@@ -60,9 +60,9 @@ describe('TeamsListPage', () => {
     global.fetch = createFetchMock({ '/api/teams': { body: [mockTeam] } });
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText('Create Team')).toBeInTheDocument();
+      expect(screen.getByText('New Team')).toBeInTheDocument();
     });
-    await userEvent.click(screen.getByText('Create Team'));
+    await userEvent.click(screen.getByText('New Team'));
     expect(mockNavigate).toHaveBeenCalledWith('/teams/new');
   });
 

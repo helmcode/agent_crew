@@ -98,7 +98,7 @@ export function TeamsListPage() {
       <EmptyState
         title="No teams yet"
         description="Create your first agent team to get started."
-        action={{ label: 'Create Team', onClick: () => navigate('/teams/new') }}
+        action={{ label: 'New Team', onClick: () => navigate('/teams/new') }}
       />
     );
   }
@@ -109,9 +109,12 @@ export function TeamsListPage() {
         <h1 className="text-2xl font-bold text-white">Teams</h1>
         <button
           onClick={() => navigate('/teams/new')}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
         >
-          Create Team
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          New Team
         </button>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

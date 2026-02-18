@@ -417,12 +417,12 @@ describe('Frontend-Backend Integration', () => {
       expect(status).toBe(400);
     });
 
-    it('should return 400 for invalid team name characters', async () => {
+    it('should accept team names with spaces and special characters', async () => {
       const { status } = await api('/api/teams', {
         method: 'POST',
-        body: JSON.stringify({ name: 'invalid name with spaces!' }),
+        body: JSON.stringify({ name: 'valid name with spaces!' }),
       });
-      expect(status).toBe(400);
+      expect(status).toBe(201);
     });
 
     it('should return 404 for non-existent team', async () => {

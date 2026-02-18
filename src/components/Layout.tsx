@@ -44,6 +44,20 @@ export function Layout() {
 
       {/* Navigation */}
       <nav className="flex flex-col gap-1 p-3">
+        {showNewTeamButton && (
+          <button
+            onClick={() => {
+              navigate('/teams/new');
+              setMobileOpen(false);
+            }}
+            className="mb-1 flex items-center gap-3 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Team
+          </button>
+        )}
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -62,20 +76,6 @@ export function Layout() {
             {item.label}
           </NavLink>
         ))}
-        {showNewTeamButton && (
-          <button
-            onClick={() => {
-              navigate('/teams/new');
-              setMobileOpen(false);
-            }}
-            className="mt-2 flex items-center gap-3 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            + New Team
-          </button>
-        )}
       </nav>
     </>
   );

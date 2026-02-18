@@ -28,7 +28,7 @@ describe('TeamBuilderPage', () => {
   it('renders step 1 by default', () => {
     renderPage();
     expect(screen.getByText('Team Config')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('my-agent-team')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('My Agent Team')).toBeInTheDocument();
   });
 
   it('disables Next when team name is empty', () => {
@@ -39,20 +39,20 @@ describe('TeamBuilderPage', () => {
 
   it('enables Next when team name is filled', async () => {
     renderPage();
-    await userEvent.type(screen.getByPlaceholderText('my-agent-team'), 'test');
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     expect(screen.getByText('Next')).not.toBeDisabled();
   });
 
   it('navigates to step 2 on Next', async () => {
     renderPage();
-    await userEvent.type(screen.getByPlaceholderText('my-agent-team'), 'test');
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
     expect(screen.getByText('Agent 1')).toBeInTheDocument();
   });
 
   it('can add and remove agents in step 2', async () => {
     renderPage();
-    await userEvent.type(screen.getByPlaceholderText('my-agent-team'), 'test');
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
 
     await userEvent.click(screen.getByText('+ Add Agent'));
@@ -65,18 +65,18 @@ describe('TeamBuilderPage', () => {
 
   it('goes back from step 2 to step 1', async () => {
     renderPage();
-    await userEvent.type(screen.getByPlaceholderText('my-agent-team'), 'test');
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
     await userEvent.click(screen.getByText('Back'));
-    expect(screen.getByPlaceholderText('my-agent-team')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('My Agent Team')).toBeInTheDocument();
   });
 
   it('shows review in step 3', async () => {
     renderPage();
-    await userEvent.type(screen.getByPlaceholderText('my-agent-team'), 'my-team');
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
     await userEvent.click(screen.getByText('Next'));
 
-    await userEvent.type(screen.getByPlaceholderText('agent-name'), 'leader');
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
     await userEvent.click(screen.getByText('Next'));
 
     expect(screen.getByText('Team Configuration')).toBeInTheDocument();
@@ -97,9 +97,9 @@ describe('TeamBuilderPage', () => {
     });
 
     renderPage();
-    await userEvent.type(screen.getByPlaceholderText('my-agent-team'), 'my-team');
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
     await userEvent.click(screen.getByText('Next'));
-    await userEvent.type(screen.getByPlaceholderText('agent-name'), 'leader');
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
     await userEvent.click(screen.getByText('Next'));
     await userEvent.click(screen.getByText('Create'));
 

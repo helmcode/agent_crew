@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AgentRole, CreateTeamRequest } from '../types';
+import type { CreateTeamRequest } from '../types';
 import { teamsApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { generateId } from '../utils/id';
@@ -13,13 +13,17 @@ const RUNTIMES = [
 interface AgentDraft {
   id: string;
   name: string;
-  role: AgentRole;
   specialty: string;
   system_prompt: string;
   skills: string[];
 }
 
-const TEAM_NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
+const MAX_NAME_LENGTH = 255;
+
+function isValidName(name: string): boolean {
+  const trimmed = name.trim();
+  return trimmed.length > 0 && trimmed.length <= MAX_NAME_LENGTH;
+}
 
 export function TeamBuilderPage() {
   const navigate = useNavigate();
@@ -34,12 +38,12 @@ export function TeamBuilderPage() {
 
   // Step 2: Agents
   const [agents, setAgents] = useState<AgentDraft[]>([
-    { id: generateId(), name: '', role: 'leader', specialty: '', system_prompt: '', skills: [] },
+    { id: generateId(), name: '', specialty: '', system_prompt: '', skills: [] },
   ]);
   const [skillInput, setSkillInput] = useState<Record<number, string>>({});
 
   function addAgent() {
-    setAgents([...agents, { id: generateId(), name: '', role: 'worker', specialty: '', system_prompt: '', skills: [] }]);
+    setAgents([...agents, { id: generateId(), name: '', specialty: '', system_prompt: '', skills: [] }]);
   }
 
   function removeAgent(index: number) {
@@ -66,8 +70,8 @@ export function TeamBuilderPage() {
   }
 
   function canProceed(): boolean {
-    if (step === 1) return TEAM_NAME_REGEX.test(teamName.trim());
-    if (step === 2) return agents.length > 0 && agents.every((a) => TEAM_NAME_REGEX.test(a.name.trim()));
+    if (step === 1) return isValidName(teamName);
+    if (step === 2) return agents.length > 0 && agents.every((a) => isValidName(a.name));
     return true;
   }
 
@@ -79,9 +83,9 @@ export function TeamBuilderPage() {
         description: description.trim() || undefined,
         runtime,
         workspace_path: workspacePath.trim() || undefined,
-        agents: agents.map((a) => ({
+        agents: agents.map((a, i) => ({
           name: a.name.trim(),
-          role: a.role,
+          role: i === 0 ? 'leader' : 'worker',
           specialty: a.specialty.trim() || undefined,
           system_prompt: a.system_prompt.trim() || undefined,
           skills: a.skills.length > 0 ? a.skills : undefined,
@@ -138,10 +142,11 @@ export function TeamBuilderPage() {
             <input
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
+              maxLength={MAX_NAME_LENGTH}
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-              placeholder="my-agent-team"
+              placeholder="My Agent Team"
             />
-            <p className="mt-1 text-xs text-slate-500">Alphanumeric, hyphens, underscores (1-64 chars)</p>
+            <p className="mt-1 text-xs text-slate-500">Any name up to {MAX_NAME_LENGTH} characters</p>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-300">Description</label>
@@ -187,7 +192,7 @@ export function TeamBuilderPage() {
             <div key={agent.id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-300">Agent {i + 1}</span>
-                {agents.length > 1 && (
+                {agents.length > 1 && i !== 0 && (
                   <button
                     onClick={() => removeAgent(i)}
                     className="text-xs text-red-400 hover:text-red-300"
@@ -202,23 +207,18 @@ export function TeamBuilderPage() {
                   <input
                     value={agent.name}
                     onChange={(e) => updateAgent(i, 'name', e.target.value)}
-                    className={`w-full rounded border bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none ${agent.name.trim() && !TEAM_NAME_REGEX.test(agent.name.trim()) ? 'border-red-500 focus:border-red-500' : 'border-slate-600 focus:border-blue-500'}`}
-                    placeholder="agent-name"
+                    maxLength={MAX_NAME_LENGTH}
+                    className={`w-full rounded border bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none ${agent.name.trim() && agent.name.trim().length > MAX_NAME_LENGTH ? 'border-red-500 focus:border-red-500' : 'border-slate-600 focus:border-blue-500'}`}
+                    placeholder="Agent name"
                   />
-                  {agent.name.trim() && !TEAM_NAME_REGEX.test(agent.name.trim()) && (
-                    <p className="mt-1 text-xs text-red-400">Alphanumeric, hyphens, underscores only</p>
-                  )}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-slate-400">Role</label>
-                  <select
-                    value={agent.role}
-                    onChange={(e) => updateAgent(i, 'role', e.target.value)}
-                    className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                  >
-                    <option value="leader">Leader</option>
-                    <option value="worker">Worker</option>
-                  </select>
+                  <div className="flex h-[34px] items-center">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${i === 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-400'}`}>
+                      {i === 0 ? 'Leader' : 'Worker'}
+                    </span>
+                  </div>
                 </div>
               </div>
               <div className="mt-3">
@@ -301,7 +301,7 @@ export function TeamBuilderPage() {
           <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
             <h3 className="mb-3 text-sm font-medium text-slate-300">Agents ({agents.length})</h3>
             <div className="space-y-2">
-              {agents.map((agent) => (
+              {agents.map((agent, i) => (
                 <div key={agent.id} className="flex items-center justify-between rounded bg-slate-900/50 px-3 py-2 text-sm">
                   <div>
                     <span className="text-white">{agent.name}</span>
@@ -310,8 +310,8 @@ export function TeamBuilderPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${agent.role === 'leader' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-400'}`}>
-                      {agent.role}
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${i === 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-400'}`}>
+                      {i === 0 ? 'leader' : 'worker'}
                     </span>
                     {agent.skills.length > 0 && (
                       <span className="text-xs text-slate-500">{agent.skills.length} skills</span>
@@ -330,9 +330,9 @@ export function TeamBuilderPage() {
                   description: description || undefined,
                   runtime,
                   workspace_path: workspacePath || undefined,
-                  agents: agents.map((a) => ({
+                  agents: agents.map((a, i) => ({
                     name: a.name,
-                    role: a.role,
+                    role: i === 0 ? 'leader' : 'worker',
                     specialty: a.specialty || undefined,
                     system_prompt: a.system_prompt || undefined,
                     skills: a.skills.length > 0 ? a.skills : undefined,

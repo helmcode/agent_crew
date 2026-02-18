@@ -12,25 +12,25 @@ function renderLayout(initialPath: string) {
 }
 
 describe('Layout', () => {
-  it('hides "+ New Team" button on teams list page (/)', () => {
+  it('hides "New Team" button on teams list page (/)', () => {
     renderLayout('/');
-    expect(screen.queryByText('+ New Team')).not.toBeInTheDocument();
+    expect(screen.queryByText('New Team')).not.toBeInTheDocument();
   });
 
-  it('hides "+ New Team" button on new team page (/teams/new)', () => {
+  it('hides "New Team" button on new team page (/teams/new)', () => {
     renderLayout('/teams/new');
-    expect(screen.queryByText('+ New Team')).not.toBeInTheDocument();
+    expect(screen.queryByText('New Team')).not.toBeInTheDocument();
   });
 
-  it('shows "+ New Team" button on settings page', () => {
+  it('shows "New Team" button on settings page', () => {
     renderLayout('/settings');
-    const buttons = screen.getAllByText('+ New Team');
+    const buttons = screen.getAllByText('New Team');
     expect(buttons.length).toBeGreaterThan(0);
   });
 
-  it('shows "+ New Team" button on team monitor page', () => {
+  it('shows "New Team" button on team monitor page', () => {
     renderLayout('/teams/some-id');
-    const buttons = screen.getAllByText('+ New Team');
+    const buttons = screen.getAllByText('New Team');
     expect(buttons.length).toBeGreaterThan(0);
   });
 });

@@ -30,23 +30,35 @@ function formatPayload(payload: unknown): string {
 
 const CHAT_TYPES = new Set(['user_message', 'agent_response', 'error', 'task_result']);
 
+// innerPayload extracts the actual message payload from a TaskLog.
+// The relay stores the full protocol.Message as TaskLog.payload, so the
+// real content is at payload.payload (nested). This handles both structures.
+function innerPayload(msg: TaskLog): Record<string, unknown> {
+  const p = msg.payload as Record<string, unknown> | null;
+  if (!p) return {};
+  // If the stored payload looks like a protocol.Message (has a nested "payload" key),
+  // use the inner payload. Otherwise use the top-level payload directly.
+  if (p.payload && typeof p.payload === 'object') {
+    return p.payload as Record<string, unknown>;
+  }
+  return p;
+}
+
 function isErrorMessage(msg: TaskLog): boolean {
   if (msg.message_type === 'error') return true;
   if (msg.error) return true;
-  if (msg.message_type === 'task_result' && msg.payload) {
-    const p = msg.payload as Record<string, unknown>;
-    if (p.error || p.is_error || p.status === 'failed') return true;
+  if (msg.message_type === 'task_result') {
+    const inner = innerPayload(msg);
+    if (inner.error || inner.is_error || inner.status === 'failed') return true;
   }
   return false;
 }
 
 function getErrorText(msg: TaskLog): string {
   if (msg.error) return msg.error;
-  if (msg.payload) {
-    const p = msg.payload as Record<string, unknown>;
-    if (typeof p.error === 'string') return p.error;
-    if (typeof p.content === 'string') return p.content;
-  }
+  const inner = innerPayload(msg);
+  if (typeof inner.error === 'string' && inner.error) return inner.error;
+  if (typeof inner.content === 'string') return inner.content;
   return formatPayload(msg.payload);
 }
 
@@ -58,10 +70,13 @@ function getChatText(msg: TaskLog): string {
       if (p && typeof p.content === 'string') return p.content;
       return formatPayload(msg.payload);
 
-    case 'task_result':
-      if (p && typeof p.result === 'string') return p.result;
-      if (p && typeof p.content === 'string') return p.content;
+    case 'task_result': {
+      const inner = innerPayload(msg);
+      if (typeof inner.result === 'string' && inner.result) return inner.result;
+      if (typeof inner.error === 'string' && inner.error) return inner.error;
+      if (typeof inner.content === 'string') return inner.content;
       return formatPayload(msg.payload);
+    }
 
     case 'agent_response':
       if (p && typeof p.content === 'string') return p.content;

@@ -104,4 +104,6 @@ export const settingsApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  delete: (key: string) =>
+    request<void>(`/api/settings/${encodeURIComponent(key)}`, { method: 'DELETE' }),
 };

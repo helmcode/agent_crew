@@ -58,29 +58,38 @@ function getErrorText(msg: TaskLog): string {
   if (msg.error) return msg.error;
   const inner = innerPayload(msg);
   if (typeof inner.error === 'string' && inner.error) return inner.error;
-  if (typeof inner.content === 'string') return inner.content;
+  if (typeof inner.content === 'string' && inner.content) return inner.content;
+  if (typeof inner.status === 'string') return `Task ${inner.status}.`;
   return formatPayload(msg.payload);
 }
 
 function getChatText(msg: TaskLog): string {
   const p = msg.payload as Record<string, unknown> | null;
+  const inner = innerPayload(msg);
 
   switch (msg.message_type) {
     case 'user_message':
       if (p && typeof p.content === 'string') return p.content;
+      if (typeof inner.content === 'string' && inner.content) return inner.content;
       return formatPayload(msg.payload);
 
     case 'task_result': {
-      const inner = innerPayload(msg);
       if (typeof inner.result === 'string' && inner.result) return inner.result;
       if (typeof inner.error === 'string' && inner.error) return inner.error;
-      if (typeof inner.content === 'string') return inner.content;
+      if (typeof inner.content === 'string' && inner.content) return inner.content;
+      // Friendly fallback when the payload carries a status but no readable text
+      // (e.g. the agent finished but returned an empty result string).
+      if (typeof inner.status === 'string') return `Task ${inner.status}.`;
       return formatPayload(msg.payload);
     }
 
-    case 'agent_response':
+    case 'agent_response': {
+      // Check top-level first (flat payload), then inner (NATS envelope).
       if (p && typeof p.content === 'string') return p.content;
+      if (typeof inner.content === 'string' && inner.content) return inner.content;
+      if (typeof inner.result === 'string' && inner.result) return inner.result;
       return formatPayload(msg.payload);
+    }
 
     default:
       return formatPayload(msg.payload);

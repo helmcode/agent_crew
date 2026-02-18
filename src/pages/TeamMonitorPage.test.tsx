@@ -210,4 +210,88 @@ describe('TeamMonitorPage', () => {
       expect(chatCall).toBeTruthy();
     });
   });
+
+  it('extracts readable text from nested NATS task_result payload', async () => {
+    const nestedMsg = {
+      ...mockTaskLog,
+      id: 'log-nested-1',
+      from_agent: 'lead',
+      to_agent: 'user',
+      message_type: 'task_result',
+      payload: {
+        message_id: 'nats-123',
+        from: 'lead',
+        to: 'team.dev.leader',
+        type: 'task_result',
+        payload: { status: 'completed', result: 'Here is the analysis you requested.' },
+        timestamp: '2026-01-01T00:00:01Z',
+      },
+    };
+
+    global.fetch = mockFetch([nestedMsg]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Here is the analysis you requested.')).toBeInTheDocument();
+    });
+    // The chat bubble (<p>) should show the extracted text, not raw JSON.
+    // The activity panel (<pre>) may legitimately show the full envelope.
+    const chatBubble = screen.getByText('Here is the analysis you requested.');
+    expect(chatBubble.tagName).toBe('P');
+  });
+
+  it('shows friendly status when task_result has empty result', async () => {
+    const emptyResultMsg = {
+      ...mockTaskLog,
+      id: 'log-empty-1',
+      from_agent: 'lead',
+      to_agent: 'user',
+      message_type: 'task_result',
+      payload: {
+        message_id: 'nats-456',
+        from: 'lead',
+        to: 'team.dev.leader',
+        type: 'task_result',
+        payload: { status: 'completed', result: '' },
+        timestamp: '2026-01-01T00:00:02Z',
+      },
+    };
+
+    global.fetch = mockFetch([emptyResultMsg]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Task completed.')).toBeInTheDocument();
+    });
+    // Friendly text should appear in a chat bubble (<p>), not raw JSON
+    const chatBubble = screen.getByText('Task completed.');
+    expect(chatBubble.tagName).toBe('P');
+  });
+
+  it('extracts content from nested NATS agent_response payload', async () => {
+    const nestedResponse = {
+      ...mockTaskLog,
+      id: 'log-resp-1',
+      from_agent: 'lead',
+      to_agent: 'user',
+      message_type: 'agent_response',
+      payload: {
+        message_id: 'nats-789',
+        from: 'lead',
+        to: 'user',
+        type: 'agent_response',
+        payload: { content: 'I have finished the refactoring.' },
+        timestamp: '2026-01-01T00:00:03Z',
+      },
+    };
+
+    global.fetch = mockFetch([nestedResponse]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('I have finished the refactoring.')).toBeInTheDocument();
+    });
+    const chatBubble = screen.getByText('I have finished the refactoring.');
+    expect(chatBubble.tagName).toBe('P');
+  });
 });

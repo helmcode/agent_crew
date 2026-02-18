@@ -40,6 +40,7 @@ export interface TaskLog {
   to_agent: string;
   message_type: string;
   payload: unknown;
+  error?: string;
   created_at: string;
 }
 

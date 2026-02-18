@@ -28,6 +28,28 @@ function formatPayload(payload: unknown): string {
   }
 }
 
+const CHAT_TYPES = new Set(['user_message', 'agent_response', 'error', 'task_result']);
+
+function isErrorMessage(msg: TaskLog): boolean {
+  if (msg.message_type === 'error') return true;
+  if (msg.error) return true;
+  if (msg.message_type === 'task_result' && msg.payload) {
+    const p = msg.payload as Record<string, unknown>;
+    if (p.error || p.is_error) return true;
+  }
+  return false;
+}
+
+function getErrorText(msg: TaskLog): string {
+  if (msg.error) return msg.error;
+  if (msg.payload) {
+    const p = msg.payload as Record<string, unknown>;
+    if (typeof p.error === 'string') return p.error;
+    if (typeof p.content === 'string') return p.content;
+  }
+  return formatPayload(msg.payload);
+}
+
 export function TeamMonitorPage() {
   const { id } = useParams<{ id: string }>();
   const teamId = id!;
@@ -129,9 +151,7 @@ export function TeamMonitorPage() {
     return true;
   });
 
-  const chatMessages = messages.filter(
-    (m) => m.message_type === 'user_message' || m.message_type === 'agent_response',
-  );
+  const chatMessages = messages.filter((m) => CHAT_TYPES.has(m.message_type));
 
   const agentNames = [...new Set(messages.map((m) => m.from_agent).filter(Boolean))];
   const messageTypes = [...new Set(messages.map((m) => m.message_type).filter(Boolean))];
@@ -211,22 +231,44 @@ export function TeamMonitorPage() {
             {chatMessages.length === 0 ? (
               <p className="text-center text-sm text-slate-500">Send a message to the team</p>
             ) : (
-              chatMessages.map((msg) => (
-                <div key={msg.id} className="mb-3">
-                  <div className="mb-0.5 flex items-center gap-1 text-xs text-slate-500">
-                    <span>{msg.from_agent || 'System'}</span>
-                    <span>&middot;</span>
-                    <span>{new Date(msg.created_at).toLocaleTimeString()}</span>
+              chatMessages.map((msg) => {
+                const hasError = isErrorMessage(msg);
+                return (
+                  <div key={msg.id} className="mb-3">
+                    <div className="mb-0.5 flex items-center gap-1 text-xs text-slate-500">
+                      <span>{msg.from_agent || 'System'}</span>
+                      <span>&middot;</span>
+                      <span>{new Date(msg.created_at).toLocaleTimeString()}</span>
+                    </div>
+                    {hasError ? (
+                      <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+                        <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-red-400">
+                          <span>&#x26A0;&#xFE0F;</span>
+                          <span>Error</span>
+                        </div>
+                        <p className="text-sm text-red-300">{getErrorText(msg)}</p>
+                        <button
+                          onClick={() => navigate('/settings')}
+                          className="mt-2 inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-700"
+                        >
+                          Go to Settings
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <p className={`rounded-lg px-3 py-2 text-sm ${
+                        msg.from_agent === 'user'
+                          ? 'bg-blue-600/10 text-blue-300'
+                          : 'bg-slate-900/50 text-slate-300'
+                      }`}>
+                        {formatPayload(msg.payload)}
+                      </p>
+                    )}
                   </div>
-                  <p className={`rounded-lg px-3 py-2 text-sm ${
-                    msg.from_agent === 'user'
-                      ? 'bg-blue-600/10 text-blue-300'
-                      : 'bg-slate-900/50 text-slate-300'
-                  }`}>
-                    {formatPayload(msg.payload)}
-                  </p>
-                </div>
-              ))
+                );
+              })
             )}
             <div ref={chatEndRef} />
           </div>

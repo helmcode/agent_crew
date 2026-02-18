@@ -82,13 +82,67 @@ describe('TeamsListPage', () => {
     });
   });
 
-  it('navigates to team monitor on View click', async () => {
+  it('navigates to team monitor on card click', async () => {
     global.fetch = createFetchMock({ '/api/teams': { body: [mockTeam] } });
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText('View')).toBeInTheDocument();
+      expect(screen.getByText('test-team')).toBeInTheDocument();
     });
-    await userEvent.click(screen.getByText('View'));
+    await userEvent.click(screen.getByText('test-team'));
     expect(mockNavigate).toHaveBeenCalledWith('/teams/team-uuid-1');
+  });
+
+  it('shows 3-dot menu on hover and opens dropdown', async () => {
+    global.fetch = createFetchMock({ '/api/teams': { body: [mockTeam] } });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('test-team')).toBeInTheDocument();
+    });
+    const menuButton = screen.getByLabelText('Menu for test-team');
+    expect(menuButton).toBeInTheDocument();
+    await userEvent.click(menuButton);
+    expect(screen.getByText('Delete Team')).toBeInTheDocument();
+  });
+
+  it('shows delete confirmation modal', async () => {
+    global.fetch = createFetchMock({ '/api/teams': { body: [mockTeam] } });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('test-team')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByLabelText('Menu for test-team'));
+    await userEvent.click(screen.getByText('Delete Team'));
+    expect(screen.getByText(/Are you sure you want to delete/)).toBeInTheDocument();
+    expect(screen.getByText('Cancel')).toBeInTheDocument();
+  });
+
+  it('closes delete modal on cancel', async () => {
+    global.fetch = createFetchMock({ '/api/teams': { body: [mockTeam] } });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('test-team')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByLabelText('Menu for test-team'));
+    await userEvent.click(screen.getByText('Delete Team'));
+    expect(screen.getByText(/Are you sure you want to delete/)).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Cancel'));
+    expect(screen.queryByText(/Are you sure you want to delete/)).not.toBeInTheDocument();
+  });
+
+  it('deletes team on confirm', async () => {
+    global.fetch = createFetchMock({
+      '/api/teams/team-uuid-1': { status: 204, body: null },
+      '/api/teams': { body: [mockTeam] },
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('test-team')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByLabelText('Menu for test-team'));
+    await userEvent.click(screen.getByText('Delete Team'));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => {
+      expect(screen.queryByText(/Are you sure you want to delete/)).not.toBeInTheDocument();
+    });
   });
 });

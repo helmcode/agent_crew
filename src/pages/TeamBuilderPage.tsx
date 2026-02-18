@@ -67,7 +67,7 @@ export function TeamBuilderPage() {
 
   function canProceed(): boolean {
     if (step === 1) return TEAM_NAME_REGEX.test(teamName.trim());
-    if (step === 2) return agents.length > 0 && agents.every((a) => a.name.trim().length > 0);
+    if (step === 2) return agents.length > 0 && agents.every((a) => TEAM_NAME_REGEX.test(a.name.trim()));
     return true;
   }
 
@@ -202,9 +202,12 @@ export function TeamBuilderPage() {
                   <input
                     value={agent.name}
                     onChange={(e) => updateAgent(i, 'name', e.target.value)}
-                    className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    className={`w-full rounded border bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:outline-none ${agent.name.trim() && !TEAM_NAME_REGEX.test(agent.name.trim()) ? 'border-red-500 focus:border-red-500' : 'border-slate-600 focus:border-blue-500'}`}
                     placeholder="agent-name"
                   />
+                  {agent.name.trim() && !TEAM_NAME_REGEX.test(agent.name.trim()) && (
+                    <p className="mt-1 text-xs text-red-400">Alphanumeric, hyphens, underscores only</p>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-slate-400">Role</label>

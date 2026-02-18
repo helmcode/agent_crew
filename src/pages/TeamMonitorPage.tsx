@@ -170,26 +170,46 @@ export function TeamMonitorPage() {
     }
     if (sending) return;
     setChatInputError(false);
+    const text = chatMessage.trim();
     setSending(true);
+    // Optimistic update: add message to local state immediately
+    const optimistic: TaskLog = {
+      id: `optimistic-${Date.now()}`,
+      team_id: teamId,
+      message_id: '',
+      from_agent: 'user',
+      to_agent: 'leader',
+      message_type: 'user_message',
+      payload: { content: text },
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setChatMessage('');
     try {
-      await chatApi.send(teamId, { message: chatMessage.trim() });
-      setChatMessage('');
-      toast('info', 'Message sent to team leader');
+      await chatApi.send(teamId, { message: text });
     } catch (err) {
+      // Remove optimistic message on failure
+      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setChatMessage(text);
       toast('error', friendlyError(err, 'Failed to send message. Please try again.'));
     } finally {
       setSending(false);
     }
   }
 
-  const filteredMessages = messages.filter((msg) => {
+  // Sort ascending (oldest first) before filtering
+  const sortedMessages = [...messages].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+
+  const filteredMessages = sortedMessages.filter((msg) => {
     if (msg.message_type === 'status_update') return false;
     if (filterAgent !== 'all' && msg.from_agent !== filterAgent) return false;
     if (filterType !== 'all' && msg.message_type !== filterType) return false;
     return true;
   });
 
-  const chatMessages = messages.filter((m) => CHAT_TYPES.has(m.message_type));
+  const chatMessages = sortedMessages.filter((m) => CHAT_TYPES.has(m.message_type));
 
   const agentNames = [...new Set(messages.map((m) => m.from_agent).filter(Boolean))];
   const messageTypes = [...new Set(messages.map((m) => m.message_type).filter(Boolean))];

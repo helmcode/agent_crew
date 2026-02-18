@@ -35,7 +35,7 @@ function isErrorMessage(msg: TaskLog): boolean {
   if (msg.error) return true;
   if (msg.message_type === 'task_result' && msg.payload) {
     const p = msg.payload as Record<string, unknown>;
-    if (p.error || p.is_error) return true;
+    if (p.error || p.is_error || p.status === 'failed') return true;
   }
   return false;
 }
@@ -48,6 +48,28 @@ function getErrorText(msg: TaskLog): string {
     if (typeof p.content === 'string') return p.content;
   }
   return formatPayload(msg.payload);
+}
+
+function getChatText(msg: TaskLog): string {
+  const p = msg.payload as Record<string, unknown> | null;
+
+  switch (msg.message_type) {
+    case 'user_message':
+      if (p && typeof p.content === 'string') return p.content;
+      return formatPayload(msg.payload);
+
+    case 'task_result':
+      if (p && typeof p.result === 'string') return p.result;
+      if (p && typeof p.content === 'string') return p.content;
+      return formatPayload(msg.payload);
+
+    case 'agent_response':
+      if (p && typeof p.content === 'string') return p.content;
+      return formatPayload(msg.payload);
+
+    default:
+      return formatPayload(msg.payload);
+  }
 }
 
 export function TeamMonitorPage() {
@@ -263,7 +285,7 @@ export function TeamMonitorPage() {
                           ? 'bg-blue-600/10 text-blue-300'
                           : 'bg-slate-900/50 text-slate-300'
                       }`}>
-                        {formatPayload(msg.payload)}
+                        {getChatText(msg)}
                       </p>
                     )}
                   </div>

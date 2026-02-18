@@ -183,6 +183,7 @@ export function TeamMonitorPage() {
   }
 
   const filteredMessages = messages.filter((msg) => {
+    if (msg.message_type === 'status_update') return false;
     if (filterAgent !== 'all' && msg.from_agent !== filterAgent) return false;
     if (filterType !== 'all' && msg.message_type !== filterType) return false;
     return true;

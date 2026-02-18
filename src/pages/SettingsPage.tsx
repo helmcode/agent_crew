@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Setting } from '../types';
 import { settingsApi } from '../services/api';
 import { toast } from '../components/Toast';
@@ -15,6 +15,8 @@ export function SettingsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isNewEntry, setIsNewEntry] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [menuOpen, setMenuOpen] = useState<number | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -30,6 +32,18 @@ export function SettingsPage() {
   useEffect(() => {
     fetchSettings();
   }, [fetchSettings]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(null);
+      }
+    }
+    if (menuOpen !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [menuOpen]);
 
   function startEdit(setting: Setting) {
     setEditKey(setting.key);
@@ -167,12 +181,33 @@ export function SettingsPage() {
                 <span className="mx-3 text-slate-600">=</span>
                 <span className="font-mono text-sm text-slate-300">{setting.value}</span>
               </div>
-              <button
-                onClick={() => startEdit(setting)}
-                className="rounded px-2 py-1 text-xs text-slate-400 opacity-0 transition-opacity hover:bg-slate-700 hover:text-white group-hover:opacity-100"
-              >
-                Edit
-              </button>
+              <div className="relative" ref={menuOpen === setting.id ? menuRef : undefined}>
+                <button
+                  onClick={() => setMenuOpen(menuOpen === setting.id ? null : setting.id)}
+                  className="rounded-md p-1 text-slate-400 opacity-0 transition-opacity hover:bg-slate-700 hover:text-slate-200 group-hover:opacity-100"
+                  aria-label={`Menu for ${setting.key}`}
+                >
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                  </svg>
+                </button>
+                {menuOpen === setting.id && (
+                  <div className="absolute right-0 top-full z-10 mt-1 w-32 rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-lg">
+                    <button
+                      onClick={() => {
+                        setMenuOpen(null);
+                        startEdit(setting);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>

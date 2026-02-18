@@ -29,7 +29,6 @@ export function TeamBuilderPage() {
   // Step 1: Team config
   const [teamName, setTeamName] = useState('');
   const [description, setDescription] = useState('');
-  const [workspacePath, setWorkspacePath] = useState('');
 
   // Step 2: Agents
   const [agents, setAgents] = useState<AgentDraft[]>([
@@ -76,7 +75,6 @@ export function TeamBuilderPage() {
       const teamReq: CreateTeamRequest = {
         name: teamName.trim(),
         description: description.trim() || undefined,
-        workspace_path: workspacePath.trim() || undefined,
         agents: agents.map((a, i) => ({
           name: a.name.trim(),
           role: i === 0 ? 'leader' : 'worker',
@@ -151,16 +149,6 @@ export function TeamBuilderPage() {
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               placeholder="What does this team do?"
             />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-300">Workspace Path</label>
-            <input
-              value={workspacePath}
-              onChange={(e) => setWorkspacePath(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-              placeholder="/path/to/workspace"
-            />
-            <p className="mt-1 text-xs text-slate-500">Working directory for the agents</p>
           </div>
         </div>
       )}
@@ -272,8 +260,6 @@ export function TeamBuilderPage() {
               <dd className="text-white">{teamName}</dd>
               <dt className="text-slate-500">Description</dt>
               <dd className="text-white">{description || '-'}</dd>
-              <dt className="text-slate-500">Workspace</dt>
-              <dd className="font-mono text-white">{workspacePath || '-'}</dd>
             </dl>
           </div>
           <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
@@ -306,7 +292,6 @@ export function TeamBuilderPage() {
                 {
                   name: teamName,
                   description: description || undefined,
-                  workspace_path: workspacePath || undefined,
                   agents: agents.map((a, i) => ({
                     name: a.name,
                     role: i === 0 ? 'leader' : 'worker',

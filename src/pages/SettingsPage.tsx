@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import type { Setting } from '../types';
 import { settingsApi } from '../services/api';
 import { toast } from '../components/Toast';
+import { friendlyError } from '../utils/errors';
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<Setting[]>([]);
@@ -20,7 +21,7 @@ export function SettingsPage() {
       const data = await settingsApi.list();
       setSettings(data ?? []);
     } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to load settings');
+      toast('error', friendlyError(err, 'Failed to load settings. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -60,7 +61,7 @@ export function SettingsPage() {
       cancelEdit();
       fetchSettings();
     } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to save');
+      toast('error', friendlyError(err, 'Failed to save setting. Please try again.'));
     } finally {
       setSaving(false);
     }

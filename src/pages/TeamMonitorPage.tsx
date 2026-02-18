@@ -5,6 +5,7 @@ import { teamsApi, messagesApi, chatApi } from '../services/api';
 import { connectTeamActivity, type ConnectionState } from '../services/websocket';
 import { StatusBadge } from '../components/StatusBadge';
 import { toast } from '../components/Toast';
+import { friendlyError } from '../utils/errors';
 
 const messageTypeColors: Record<string, string> = {
   user_message: 'text-blue-400',
@@ -48,7 +49,7 @@ export function TeamMonitorPage() {
       const data = await teamsApi.get(teamId);
       setTeam(data);
     } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to load team');
+      toast('error', friendlyError(err, 'Failed to load team. Please try again.'));
     }
   }, [teamId]);
 
@@ -89,7 +90,7 @@ export function TeamMonitorPage() {
       setChatMessage('');
       toast('info', 'Message sent to team leader');
     } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to send');
+      toast('error', friendlyError(err, 'Failed to send message. Please try again.'));
     } finally {
       setSending(false);
     }

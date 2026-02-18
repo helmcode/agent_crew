@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { CreateTeamRequest } from '../types';
 import { teamsApi } from '../services/api';
 import { toast } from '../components/Toast';
+import { friendlyError } from '../utils/errors';
 import { generateId } from '../utils/id';
 
 interface AgentDraft {
@@ -94,7 +95,7 @@ export function TeamBuilderPage() {
       }
       navigate(`/teams/${team.id}`);
     } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Failed to create team');
+      toast('error', friendlyError(err, 'Failed to create team. Please try again.'));
     } finally {
       setSubmitting(false);
     }

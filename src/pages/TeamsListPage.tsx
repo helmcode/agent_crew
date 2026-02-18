@@ -6,6 +6,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { EmptyState } from '../components/EmptyState';
 import { toast } from '../components/Toast';
+import { friendlyError } from '../utils/errors';
 
 export function TeamsListPage() {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -22,7 +23,7 @@ export function TeamsListPage() {
       setTeams(data ?? []);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load teams');
+      setError(friendlyError(err, 'Failed to load teams. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -53,7 +54,7 @@ export function TeamsListPage() {
       toast('success', 'Team deployment started');
       fetchTeams();
     } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Deploy failed');
+      toast('error', friendlyError(err, 'Failed to deploy team. Please try again.'));
     }
   }
 
@@ -64,7 +65,7 @@ export function TeamsListPage() {
       toast('success', 'Team stop initiated');
       fetchTeams();
     } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Stop failed');
+      toast('error', friendlyError(err, 'Failed to stop team. Please try again.'));
     }
   }
 
@@ -76,7 +77,7 @@ export function TeamsListPage() {
       setDeleteConfirm(null);
       fetchTeams();
     } catch (err) {
-      toast('error', err instanceof Error ? err.message : 'Delete failed');
+      toast('error', friendlyError(err, 'Failed to delete team. Please try again.'));
     }
   }
 

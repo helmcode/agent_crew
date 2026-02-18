@@ -113,4 +113,75 @@ describe('TeamBuilderPage', () => {
     await userEvent.click(screen.getByText('Cancel'));
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
+
+  it('shows workspace path input in step 1', () => {
+    renderPage();
+    expect(screen.getByPlaceholderText('/path/to/your/project')).toBeInTheDocument();
+    expect(screen.getByText('Local directory to mount inside agent containers. Agents can read and write files here.')).toBeInTheDocument();
+  });
+
+  it('includes workspace_path in the review and create payload', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? 'GET';
+      if (method === 'POST' && url.endsWith('/api/teams')) {
+        return new Response(JSON.stringify(mockTeam), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.type(screen.getByPlaceholderText('/path/to/your/project'), '/home/user/project');
+    await userEvent.click(screen.getByText('Next'));
+
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+    await userEvent.click(screen.getByText('Next'));
+
+    // Step 3 review should display the workspace path
+    expect(screen.getByText('/home/user/project')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.endsWith('/api/teams') && call[1]?.method === 'POST';
+      });
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(createCall![1]!.body as string);
+      expect(body.workspace_path).toBe('/home/user/project');
+    });
+  });
+
+  it('omits workspace_path from payload when empty', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? 'GET';
+      if (method === 'POST' && url.endsWith('/api/teams')) {
+        return new Response(JSON.stringify(mockTeam), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    // Leave workspace path empty
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.endsWith('/api/teams') && call[1]?.method === 'POST';
+      });
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(createCall![1]!.body as string);
+      expect(body.workspace_path).toBeUndefined();
+    });
+  });
 });

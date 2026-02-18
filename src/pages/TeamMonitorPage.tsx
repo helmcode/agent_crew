@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { Team, TaskLog, ContainerStatus } from '../types';
 import { teamsApi, messagesApi, chatApi } from '../services/api';
 import { connectTeamActivity, type ConnectionState } from '../services/websocket';
@@ -31,17 +31,19 @@ function formatPayload(payload: unknown): string {
 export function TeamMonitorPage() {
   const { id } = useParams<{ id: string }>();
   const teamId = id!;
+  const navigate = useNavigate();
 
   const [team, setTeam] = useState<Team | null>(null);
   const [messages, setMessages] = useState<TaskLog[]>([]);
   const [wsState, setWsState] = useState<ConnectionState>('disconnected');
   const [chatMessage, setChatMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [chatInputError, setChatInputError] = useState(false);
   const [filterAgent, setFilterAgent] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
 
-  const logsEndRef = useRef<HTMLDivElement>(null);
-  const logsContainerRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
   const fetchTeam = useCallback(async () => {
@@ -61,29 +63,38 @@ export function TeamMonitorPage() {
     return () => clearInterval(interval);
   }, [teamId, fetchTeam]);
 
-  // WebSocket connection
+  // WebSocket connection — deduplicate by message ID
   useEffect(() => {
     const disconnect = connectTeamActivity(teamId, {
-      onMessage: (log) => setMessages((prev) => [...prev, log].slice(-500)),
+      onMessage: (log) =>
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === log.id)) return prev;
+          return [...prev, log].slice(-500);
+        }),
       onStateChange: setWsState,
     });
     return disconnect;
   }, [teamId]);
 
-  // Auto-scroll
+  // Auto-scroll chat
   useEffect(() => {
-    if (autoScroll) logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (autoScroll) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, autoScroll]);
 
-  function handleLogsScroll() {
-    const el = logsContainerRef.current;
+  function handleChatScroll() {
+    const el = chatContainerRef.current;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     setAutoScroll(atBottom);
   }
 
   async function handleSend() {
-    if (!chatMessage.trim() || sending) return;
+    if (!chatMessage.trim()) {
+      setChatInputError(true);
+      return;
+    }
+    if (sending) return;
+    setChatInputError(false);
     setSending(true);
     try {
       await chatApi.send(teamId, { message: chatMessage.trim() });
@@ -101,6 +112,10 @@ export function TeamMonitorPage() {
     if (filterType !== 'all' && msg.message_type !== filterType) return false;
     return true;
   });
+
+  const chatMessages = messages.filter(
+    (m) => m.message_type === 'user_message' || m.message_type === 'agent_response',
+  );
 
   const agentNames = [...new Set(messages.map((m) => m.from_agent).filter(Boolean))];
   const messageTypes = [...new Set(messages.map((m) => m.message_type).filter(Boolean))];
@@ -120,125 +135,67 @@ export function TeamMonitorPage() {
     );
   }
 
+  const dotColor: Record<ContainerStatus, string> = {
+    running: 'bg-green-400',
+    stopped: 'bg-slate-400',
+    error: 'bg-red-400',
+  };
+
   return (
-    <div className="flex h-[calc(100vh-5rem)] gap-4">
-      {/* Left Panel: Team Info & Agents */}
-      <div className="hidden w-64 flex-shrink-0 flex-col rounded-lg border border-slate-700/50 bg-slate-800/50 md:flex">
-        <div className="border-b border-slate-700 p-4">
-          <h2 className="mb-1 text-lg font-semibold text-white">{team.name}</h2>
-          <p className="mb-2 text-xs text-slate-400">{team.description || 'No description'}</p>
-          <StatusBadge status={team.status} />
-          <div className="mt-2 text-xs text-slate-500">
-            <span className="font-mono">{team.runtime === 'kubernetes' ? '☸️' : '🐳'} {team.runtime}</span>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-500">
-            {team.runtime === 'kubernetes' ? 'Pod Status' : 'Container Status'}
-          </h3>
-          {team.agents && team.agents.length > 0 ? (
-            <div className="space-y-2">
-              {team.agents.map((agent) => {
-                const dotColor: Record<ContainerStatus, string> = {
-                  running: 'bg-green-400',
-                  stopped: 'bg-slate-400',
-                  error: 'bg-red-400',
-                };
-                return (
-                  <div key={agent.id} className="flex items-center gap-2 rounded-md bg-slate-900/50 px-3 py-2">
-                    <span className={`h-2 w-2 rounded-full ${dotColor[agent.container_status]} ${agent.container_status === 'running' ? 'animate-pulse' : ''}`} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-white">{agent.name}</p>
-                      <p className="text-xs text-slate-500">{agent.role}{agent.specialty ? ` \u2022 ${agent.specialty}` : ''}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500">No agents</p>
-          )}
-        </div>
-      </div>
-
-      {/* Center Panel: Activity Feed */}
-      <div className="flex flex-1 flex-col rounded-lg border border-slate-700/50 bg-slate-800/50">
-        <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <h3 className="text-sm font-medium text-white">Activity</h3>
-            <div className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${connectionColors[wsState]}`} />
-              <span className="text-xs text-slate-500">{wsState}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={filterAgent}
-              onChange={(e) => setFilterAgent(e.target.value)}
-              className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-300 focus:outline-none"
-            >
-              <option value="all">All agents</option>
-              {agentNames.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-300 focus:outline-none"
-            >
-              <option value="all">All types</option>
-              {messageTypes.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div
-          ref={logsContainerRef}
-          onScroll={handleLogsScroll}
-          className="flex-1 overflow-y-auto p-4 font-mono text-sm"
+    <div className="flex h-[calc(100vh-5rem)] flex-col gap-4">
+      {/* Top Bar: Back button + Team Info */}
+      <div className="flex flex-shrink-0 items-center gap-4 rounded-lg border border-slate-700/50 bg-slate-800/50 px-4 py-3">
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-1 text-sm text-slate-400 transition-colors hover:text-white"
         >
-          {filteredMessages.length === 0 ? (
-            <p className="text-center text-sm text-slate-500">No activity yet</p>
-          ) : (
-            filteredMessages.map((msg) => (
-              <div key={msg.id} className="mb-2 rounded bg-slate-900/50 px-3 py-2">
-                <div className="mb-1 flex items-center gap-2 text-xs">
-                  <span className={messageTypeColors[msg.message_type] ?? 'text-slate-400'}>
-                    [{msg.message_type}]
-                  </span>
-                  {msg.from_agent && (
-                    <span className="text-slate-500">
-                      {msg.from_agent}{msg.to_agent ? ` \u2192 ${msg.to_agent}` : ''}
-                    </span>
-                  )}
-                  <span className="ml-auto text-slate-600">
-                    {new Date(msg.created_at).toLocaleTimeString()}
-                  </span>
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Teams
+        </button>
+        <div className="h-5 w-px bg-slate-700" />
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-white">{team.name}</h2>
+          <StatusBadge status={team.status} />
+        </div>
+        {team.description && (
+          <>
+            <div className="h-5 w-px bg-slate-700" />
+            <p className="truncate text-xs text-slate-400">{team.description}</p>
+          </>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          {team.agents && team.agents.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              {team.agents.map((agent) => (
+                <div key={agent.id} className="group relative flex items-center gap-1.5 rounded-md bg-slate-900/50 px-2 py-1">
+                  <span className={`h-2 w-2 rounded-full ${dotColor[agent.container_status]} ${agent.container_status === 'running' ? 'animate-pulse' : ''}`} />
+                  <span className="text-xs text-slate-300">{agent.name}</span>
+                  <span className="text-xs text-slate-600">{agent.role}</span>
                 </div>
-                <pre className="whitespace-pre-wrap break-words text-xs text-slate-300">
-                  {formatPayload(msg.payload)}
-                </pre>
-              </div>
-            ))
+              ))}
+            </div>
           )}
-          <div ref={logsEndRef} />
         </div>
       </div>
 
-      {/* Right Panel: Chat */}
-      <div className="hidden w-80 flex-shrink-0 flex-col rounded-lg border border-slate-700/50 bg-slate-800/50 lg:flex">
-        <div className="border-b border-slate-700 px-4 py-3">
-          <h3 className="text-sm font-medium text-white">Chat</h3>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          {messages.filter((m) => m.message_type === 'user_message' || m.message_type === 'agent_response').length === 0 ? (
-            <p className="text-center text-xs text-slate-500">Send a message to the team</p>
-          ) : (
-            messages
-              .filter((m) => m.message_type === 'user_message' || m.message_type === 'agent_response')
-              .map((msg) => (
+      {/* Main Content: Chat (left, large) + Activity (right, narrow) */}
+      <div className="flex min-h-0 flex-1 gap-4">
+        {/* Chat Panel — Main */}
+        <div className="flex flex-1 flex-col rounded-lg border border-slate-700/50 bg-slate-800/50">
+          <div className="border-b border-slate-700 px-4 py-3">
+            <h3 className="text-sm font-medium text-white">Chat</h3>
+          </div>
+          <div
+            ref={chatContainerRef}
+            onScroll={handleChatScroll}
+            className="flex-1 overflow-y-auto p-4"
+          >
+            {chatMessages.length === 0 ? (
+              <p className="text-center text-sm text-slate-500">Send a message to the team</p>
+            ) : (
+              chatMessages.map((msg) => (
                 <div key={msg.id} className="mb-3">
                   <div className="mb-0.5 flex items-center gap-1 text-xs text-slate-500">
                     <span>{msg.from_agent || 'System'}</span>
@@ -254,25 +211,95 @@ export function TeamMonitorPage() {
                   </p>
                 </div>
               ))
-          )}
+            )}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="border-t border-slate-700 p-3">
+            <div className="flex gap-2">
+              <input
+                value={chatMessage}
+                onChange={(e) => {
+                  setChatMessage(e.target.value);
+                  if (chatInputError && e.target.value.trim()) setChatInputError(false);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder="Send a message..."
+                disabled={team.status !== 'running'}
+                className={`flex-1 rounded-lg border bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none disabled:opacity-50 ${
+                  chatInputError
+                    ? 'border-red-500 focus:border-red-500'
+                    : 'border-slate-600 focus:border-blue-500'
+                }`}
+              />
+              <button
+                onClick={handleSend}
+                disabled={sending || team.status !== 'running'}
+                className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+              >
+                {sending ? '...' : 'Send'}
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="border-t border-slate-700 p-3">
-          <div className="flex gap-2">
-            <input
-              value={chatMessage}
-              onChange={(e) => setChatMessage(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder="Send a message..."
-              disabled={team.status !== 'running'}
-              className="flex-1 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
-            />
-            <button
-              onClick={handleSend}
-              disabled={sending || !chatMessage.trim() || team.status !== 'running'}
-              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
-            >
-              {sending ? '...' : 'Send'}
-            </button>
+
+        {/* Activity Panel — Right, narrower */}
+        <div className="hidden w-96 flex-shrink-0 flex-col rounded-lg border border-slate-700/50 bg-slate-800/50 lg:flex">
+          <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-medium text-white">Activity</h3>
+              <div className="flex items-center gap-1.5">
+                <span className={`h-2 w-2 rounded-full ${connectionColors[wsState]}`} />
+                <span className="text-xs text-slate-500">{wsState}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={filterAgent}
+                onChange={(e) => setFilterAgent(e.target.value)}
+                className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-300 focus:outline-none"
+              >
+                <option value="all">All agents</option>
+                {agentNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-300 focus:outline-none"
+              >
+                <option value="all">All types</option>
+                {messageTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 font-mono text-sm">
+            {filteredMessages.length === 0 ? (
+              <p className="text-center text-sm text-slate-500">No activity yet</p>
+            ) : (
+              filteredMessages.map((msg) => (
+                <div key={msg.id} className="mb-2 rounded bg-slate-900/50 px-3 py-2">
+                  <div className="mb-1 flex items-center gap-2 text-xs">
+                    <span className={messageTypeColors[msg.message_type] ?? 'text-slate-400'}>
+                      [{msg.message_type}]
+                    </span>
+                    {msg.from_agent && (
+                      <span className="text-slate-500">
+                        {msg.from_agent}{msg.to_agent ? ` \u2192 ${msg.to_agent}` : ''}
+                      </span>
+                    )}
+                    <span className="ml-auto text-slate-600">
+                      {new Date(msg.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <pre className="whitespace-pre-wrap break-words text-xs text-slate-300">
+                    {formatPayload(msg.payload)}
+                  </pre>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

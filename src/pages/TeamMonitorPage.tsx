@@ -130,12 +130,33 @@ export function TeamMonitorPage() {
     return () => clearInterval(interval);
   }, [teamId, fetchTeam]);
 
-  // WebSocket connection — deduplicate by message ID
+  // WebSocket connection — deduplicate by message ID, replace optimistic messages
   useEffect(() => {
     const disconnect = connectTeamActivity(teamId, {
       onMessage: (log) =>
         setMessages((prev) => {
+          // Already present — skip
           if (prev.some((m) => m.id === log.id)) return prev;
+
+          // For real user messages, replace a matching optimistic placeholder
+          if (log.message_type === 'user_message' && log.from_agent === 'user') {
+            const incoming = log.payload as Record<string, unknown>;
+            const content = typeof incoming?.content === 'string' ? incoming.content : null;
+            if (content) {
+              const idx = prev.findIndex(
+                (m) =>
+                  m.id.startsWith('optimistic-') &&
+                  m.message_type === 'user_message' &&
+                  (m.payload as Record<string, unknown>)?.content === content,
+              );
+              if (idx !== -1) {
+                const next = [...prev];
+                next[idx] = log;
+                return next;
+              }
+            }
+          }
+
           return [...prev, log].slice(-500);
         }),
       onStateChange: setWsState,

@@ -4,6 +4,7 @@ import type { Team, TaskLog, ContainerStatus } from '../types';
 import { teamsApi, messagesApi, chatApi } from '../services/api';
 import { connectTeamActivity, type ConnectionState } from '../services/websocket';
 import { StatusBadge } from '../components/StatusBadge';
+import { MarkdownRenderer } from '../components/Markdown';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
 
@@ -346,13 +347,13 @@ export function TeamMonitorPage() {
                         </button>
                       </div>
                     ) : (
-                      <p className={`rounded-lg px-3 py-2 text-sm ${
+                      <div className={`rounded-lg px-3 py-2 text-sm ${
                         msg.from_agent === 'user'
                           ? 'bg-blue-600/10 text-blue-300'
                           : 'bg-slate-900/50 text-slate-300'
                       }`}>
-                        {getChatText(msg)}
-                      </p>
+                        <MarkdownRenderer>{getChatText(msg)}</MarkdownRenderer>
+                      </div>
                     )}
                   </div>
                 );

@@ -11,7 +11,6 @@ interface AgentDraft {
   name: string;
   specialty: string;
   system_prompt: string;
-  skills: string[];
 }
 
 const MAX_NAME_LENGTH = 255;
@@ -33,12 +32,11 @@ export function TeamBuilderPage() {
 
   // Step 2: Agents
   const [agents, setAgents] = useState<AgentDraft[]>([
-    { id: generateId(), name: '', specialty: '', system_prompt: '', skills: [] },
+    { id: generateId(), name: '', specialty: '', system_prompt: '' },
   ]);
-  const [skillInput, setSkillInput] = useState<Record<number, string>>({});
 
   function addAgent() {
-    setAgents([...agents, { id: generateId(), name: '', specialty: '', system_prompt: '', skills: [] }]);
+    setAgents([...agents, { id: generateId(), name: '', specialty: '', system_prompt: '' }]);
   }
 
   function removeAgent(index: number) {
@@ -47,21 +45,6 @@ export function TeamBuilderPage() {
 
   function updateAgent(index: number, field: keyof AgentDraft, value: string | string[]) {
     setAgents(agents.map((a, i) => (i === index ? { ...a, [field]: value } : a)));
-  }
-
-  function addSkill(index: number) {
-    const skill = skillInput[index]?.trim();
-    if (!skill) return;
-    const agent = agents[index];
-    if (!agent.skills.includes(skill)) {
-      updateAgent(index, 'skills', [...agent.skills, skill]);
-    }
-    setSkillInput({ ...skillInput, [index]: '' });
-  }
-
-  function removeSkill(agentIndex: number, skillIndex: number) {
-    const agent = agents[agentIndex];
-    updateAgent(agentIndex, 'skills', agent.skills.filter((_, i) => i !== skillIndex));
   }
 
   function canProceed(): boolean {
@@ -82,7 +65,6 @@ export function TeamBuilderPage() {
           role: i === 0 ? 'leader' : 'worker',
           specialty: a.specialty.trim() || undefined,
           system_prompt: a.system_prompt.trim() || undefined,
-          skills: a.skills.length > 0 ? a.skills : undefined,
         })),
       };
       const team = await teamsApi.create(teamReq);
@@ -220,37 +202,6 @@ export function TeamBuilderPage() {
                   placeholder="Instructions for the agent..."
                 />
               </div>
-              <div className="mt-3">
-                <label className="mb-1 block text-xs text-slate-400">Skills</label>
-                <div className="flex gap-2">
-                  <input
-                    value={skillInput[i] ?? ''}
-                    onChange={(e) => setSkillInput({ ...skillInput, [i]: e.target.value })}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill(i); } }}
-                    className="flex-1 rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                    placeholder="Add skill and press Enter"
-                  />
-                  <button
-                    onClick={() => addSkill(i)}
-                    className="rounded bg-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-600"
-                  >
-                    Add
-                  </button>
-                </div>
-                {agent.skills.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {agent.skills.map((skill, si) => (
-                      <span
-                        key={si}
-                        className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-0.5 text-xs text-blue-400"
-                      >
-                        {skill}
-                        <button onClick={() => removeSkill(i, si)} className="hover:text-blue-200">&times;</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           ))}
           <button
@@ -291,9 +242,6 @@ export function TeamBuilderPage() {
                     <span className={`rounded-full px-2 py-0.5 text-xs ${i === 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-400'}`}>
                       {i === 0 ? 'leader' : 'worker'}
                     </span>
-                    {agent.skills.length > 0 && (
-                      <span className="text-xs text-slate-500">{agent.skills.length} skills</span>
-                    )}
                   </div>
                 </div>
               ))}
@@ -312,7 +260,6 @@ export function TeamBuilderPage() {
                     role: i === 0 ? 'leader' : 'worker',
                     specialty: a.specialty || undefined,
                     system_prompt: a.system_prompt || undefined,
-                    skills: a.skills.length > 0 ? a.skills : undefined,
                   })),
                 },
                 null,

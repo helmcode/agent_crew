@@ -294,4 +294,316 @@ describe('TeamMonitorPage', () => {
     const chatBubble = screen.getByText('I have finished the refactoring.');
     expect(chatBubble.tagName).toBe('P');
   });
+
+  // --- Thinking indicator tests ---
+
+  it('shows thinking indicator after sending a message', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Hello');
+    await userEvent.click(screen.getByText('Send'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    });
+  });
+
+  it('hides thinking indicator when agent_response arrives', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Hello');
+    await userEvent.click(screen.getByText('Send'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    });
+
+    act(() => {
+      wsOnMessage?.({
+        ...mockTaskLog,
+        id: 'agent-reply-1',
+        from_agent: 'lead',
+        to_agent: 'user',
+        message_type: 'agent_response',
+        payload: { content: 'Here is my reply.' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+  });
+
+  it('hides thinking indicator when task_result arrives', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Run task');
+    await userEvent.click(screen.getByText('Send'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    });
+
+    act(() => {
+      wsOnMessage?.({
+        ...mockTaskLog,
+        id: 'task-result-1',
+        from_agent: 'lead',
+        to_agent: 'user',
+        message_type: 'task_result',
+        payload: { result: 'Task done.' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+  });
+
+  it('hides thinking indicator when error arrives from agent', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Break things');
+    await userEvent.click(screen.getByText('Send'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    });
+
+    act(() => {
+      wsOnMessage?.({
+        ...mockTaskLog,
+        id: 'error-1',
+        from_agent: 'lead',
+        to_agent: 'user',
+        message_type: 'error',
+        payload: { content: 'Something went wrong' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+  });
+
+  it('does not hide thinking indicator on error from user', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Test');
+    await userEvent.click(screen.getByText('Send'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    });
+
+    act(() => {
+      wsOnMessage?.({
+        ...mockTaskLog,
+        id: 'error-user-1',
+        from_agent: 'user',
+        message_type: 'error',
+        payload: { content: 'User-side error' },
+      });
+    });
+
+    // Indicator should still be visible because from_agent === 'user'
+    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+  });
+
+  it('does not show thinking indicator when send fails', async () => {
+    const failFetch = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/chat')) {
+        return new Response(JSON.stringify({ error: 'Server error' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/messages')) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('/api/teams/')) {
+        return new Response(JSON.stringify(mockRunningTeam), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = failFetch;
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Fail msg');
+    await userEvent.click(screen.getByText('Send'));
+
+    // After failed send, the thinking indicator should not remain
+    await waitFor(() => {
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+  });
+
+  // --- Optimistic message tests ---
+
+  it('shows optimistic message immediately before API response', async () => {
+    // Use a fetch that delays chat response
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/chat')) {
+        await new Promise((r) => setTimeout(r, 100));
+        return new Response(JSON.stringify({ status: 'queued' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('/messages')) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('/api/teams/')) {
+        return new Response(JSON.stringify(mockRunningTeam), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Optimistic hello');
+    await userEvent.click(screen.getByText('Send'));
+
+    // Message should appear immediately (optimistic) — may appear in both chat and activity panels
+    await waitFor(() => {
+      expect(screen.getAllByText('Optimistic hello').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('replaces optimistic message with real WebSocket message', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Replace me');
+    await userEvent.click(screen.getByText('Send'));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Replace me').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const beforeCount = screen.getAllByText('Replace me').length;
+
+    // Simulate the real message arriving via WebSocket — should replace the optimistic one
+    act(() => {
+      wsOnMessage?.({
+        ...mockTaskLog,
+        id: 'real-msg-1',
+        from_agent: 'user',
+        to_agent: 'leader',
+        message_type: 'user_message',
+        payload: { content: 'Replace me' },
+      });
+    });
+
+    // Count should not increase (optimistic was replaced, not duplicated)
+    await waitFor(() => {
+      const afterCount = screen.getAllByText('Replace me').length;
+      expect(afterCount).toBeLessThanOrEqual(beforeCount);
+    });
+  });
+
+  it('deduplicates messages with the same ID', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    const msg = {
+      ...mockTaskLog,
+      id: 'dedup-1',
+      from_agent: 'lead',
+      message_type: 'agent_response',
+      payload: { content: 'Unique message' },
+    };
+
+    act(() => {
+      wsOnMessage?.(msg);
+      wsOnMessage?.(msg); // duplicate
+    });
+
+    await waitFor(() => {
+      const matches = screen.getAllByText('Unique message');
+      // Should appear in chat and activity, but each only once
+      expect(matches.length).toBeLessThanOrEqual(2);
+    });
+  });
+
+  it('renders error messages with error styling', async () => {
+    const errorMsg = {
+      ...mockTaskLog,
+      id: 'err-styled-1',
+      from_agent: 'lead',
+      to_agent: 'user',
+      message_type: 'error',
+      payload: { content: 'API key is invalid' },
+    };
+
+    global.fetch = mockFetch([errorMsg]);
+    renderPage();
+
+    await waitFor(() => {
+      // Error label in chat panel
+      expect(screen.getAllByText('Error').length).toBeGreaterThanOrEqual(1);
+      // Error text appears in chat and possibly activity
+      expect(screen.getAllByText('API key is invalid').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Verify the error styling is applied (red border container exists in chat)
+    const errorContainer = document.querySelector('.border-red-500\\/30');
+    expect(errorContainer).toBeTruthy();
+  });
+
+  it('shows empty chat placeholder when no chat messages', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Send a message to the team')).toBeInTheDocument();
+    });
+  });
+
+  it('clears input after successful send', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    const input = screen.getByPlaceholderText('Send a message...');
+    await userEvent.type(input, 'Clear me');
+    await userEvent.click(screen.getByText('Send'));
+
+    await waitFor(() => {
+      expect(input).toHaveValue('');
+    });
+  });
 });

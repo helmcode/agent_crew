@@ -235,12 +235,13 @@ export function TeamMonitorPage() {
     };
     setMessages((prev) => [...prev, optimistic]);
     setChatMessage('');
+    setWaitingForReply(true);
     try {
       await chatApi.send(teamId, { message: text });
-      setWaitingForReply(true);
     } catch (err) {
       // Remove optimistic message on failure
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setWaitingForReply(false);
       setChatMessage(text);
       toast('error', friendlyError(err, 'Failed to send message. Please try again.'));
     } finally {

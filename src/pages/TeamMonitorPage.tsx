@@ -107,6 +107,7 @@ export function TeamMonitorPage() {
   const [wsState, setWsState] = useState<ConnectionState>('disconnected');
   const [chatMessage, setChatMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [waitingForReply, setWaitingForReply] = useState(false);
   const [chatInputError, setChatInputError] = useState(false);
   const [filterAgent, setFilterAgent] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
@@ -117,6 +118,9 @@ export function TeamMonitorPage() {
   const activityContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [activityAutoScroll, setActivityAutoScroll] = useState(true);
+  // Track previous message count to only scroll when NEW messages arrive,
+  // not on every render cycle (e.g. caused by team status polling).
+  const prevMessagesCountRef = useRef(0);
 
   const fetchTeam = useCallback(async () => {
     try {
@@ -143,7 +147,14 @@ export function TeamMonitorPage() {
   // WebSocket connection — deduplicate by message ID, replace optimistic messages
   useEffect(() => {
     const disconnect = connectTeamActivity(teamId, {
-      onMessage: (log) =>
+      onMessage: (log) => {
+        // Clear the thinking indicator when an agent reply arrives
+        if (
+          (log.message_type === 'agent_response' || log.message_type === 'task_result' || log.message_type === 'error') &&
+          log.from_agent !== 'user'
+        ) {
+          setWaitingForReply(false);
+        }
         setMessages((prev) => {
           // Already present — skip
           if (prev.some((m) => m.id === log.id)) return prev;
@@ -168,16 +179,24 @@ export function TeamMonitorPage() {
           }
 
           return [...prev, log].slice(-500);
-        }),
+        });
+      },
       onStateChange: setWsState,
     });
     return disconnect;
   }, [teamId]);
 
-  // Auto-scroll chat and activity panels
+  // Auto-scroll chat and activity panels only when new messages arrive.
+  // Using a ref to track the previous count prevents scroll jitter caused by
+  // team-status polling (fetchTeam → setTeam) which triggers re-renders without
+  // actually adding new messages to the list.
   useEffect(() => {
-    if (autoScroll) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    if (activityAutoScroll) activityEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const currentCount = messages.length;
+    if (currentCount > prevMessagesCountRef.current) {
+      prevMessagesCountRef.current = currentCount;
+      if (autoScroll) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      if (activityAutoScroll) activityEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, autoScroll, activityAutoScroll]);
 
   function handleChatScroll() {
@@ -218,6 +237,7 @@ export function TeamMonitorPage() {
     setChatMessage('');
     try {
       await chatApi.send(teamId, { message: text });
+      setWaitingForReply(true);
     } catch (err) {
       // Remove optimistic message on failure
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
@@ -358,6 +378,21 @@ export function TeamMonitorPage() {
                   </div>
                 );
               })
+            )}
+            {waitingForReply && (
+              <div className="mb-3">
+                <div className="mb-0.5 flex items-center gap-1 text-xs text-slate-500">
+                  <span>Agent</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-lg bg-slate-900/50 px-3 py-2 text-sm text-slate-400">
+                  <span className="flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+                  </span>
+                  <span>Thinking...</span>
+                </div>
+              </div>
             )}
             <div ref={chatEndRef} />
           </div>

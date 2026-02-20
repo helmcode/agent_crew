@@ -51,8 +51,9 @@ test.describe('Team Builder Wizard', () => {
     await page.getByPlaceholder('/path/to/your/project').fill('/tmp/test');
     await page.getByRole('button', { name: 'Next' }).click();
 
-    // Step 2: Agents
+    // Step 2: Agents — should show CLAUDE.md editor
     await expect(page.getByText('Agent 1')).toBeVisible();
+    await expect(page.getByText('CLAUDE.md Content')).toBeVisible();
     await page.getByPlaceholder('Agent name').fill('leader-agent');
     await page.getByRole('button', { name: 'Next' }).click();
 
@@ -93,5 +94,38 @@ test.describe('Team Builder Wizard', () => {
 
     await expect(page.getByText('Skills')).not.toBeVisible();
     await expect(page.getByPlaceholder('Add skill and press Enter')).not.toBeVisible();
+  });
+
+  test('specialty and system prompt do not exist in step 2', async ({ page }) => {
+    await page.goto('/teams/new');
+    await page.getByPlaceholder('My Agent Team').fill('test');
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    await expect(page.getByText('Specialty')).not.toBeVisible();
+    await expect(page.getByText('System Prompt')).not.toBeVisible();
+  });
+
+  test('CLAUDE.md editor has default template', async ({ page }) => {
+    await page.goto('/teams/new');
+    await page.getByPlaceholder('My Agent Team').fill('test');
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    const editor = page.getByPlaceholder('# Agent instructions in Markdown...');
+    await expect(editor).toBeVisible();
+    const value = await editor.inputValue();
+    expect(value).toContain('# Agent:');
+    expect(value).toContain('## Role');
+    expect(value).toContain('leader');
+  });
+
+  test('CLAUDE.md editor content is editable', async ({ page }) => {
+    await page.goto('/teams/new');
+    await page.getByPlaceholder('My Agent Team').fill('test');
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    const editor = page.getByPlaceholder('# Agent instructions in Markdown...');
+    await editor.clear();
+    await editor.fill('# Custom instructions for my agent');
+    await expect(editor).toHaveValue('# Custom instructions for my agent');
   });
 });

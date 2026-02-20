@@ -9,8 +9,7 @@ import { generateId } from '../utils/id';
 interface AgentDraft {
   id: string;
   name: string;
-  specialty: string;
-  system_prompt: string;
+  claude_md: string;
 }
 
 const MAX_NAME_LENGTH = 255;
@@ -31,12 +30,18 @@ export function TeamBuilderPage() {
   const [workspacePath, setWorkspacePath] = useState('');
 
   // Step 2: Agents
+  function defaultClaudeMd(name: string, role: string): string {
+    return `# Agent: ${name || '{name}'}\n\n## Role\n${role}\n\n## Instructions\nDescribe the agent's instructions here.\n`;
+  }
+
   const [agents, setAgents] = useState<AgentDraft[]>([
-    { id: generateId(), name: '', specialty: '', system_prompt: '' },
+    { id: generateId(), name: '', claude_md: defaultClaudeMd('', 'leader') },
   ]);
 
   function addAgent() {
-    setAgents([...agents, { id: generateId(), name: '', specialty: '', system_prompt: '' }]);
+    const index = agents.length;
+    const role = index === 0 ? 'leader' : 'worker';
+    setAgents([...agents, { id: generateId(), name: '', claude_md: defaultClaudeMd('', role) }]);
   }
 
   function removeAgent(index: number) {
@@ -63,8 +68,7 @@ export function TeamBuilderPage() {
         agents: agents.map((a, i) => ({
           name: a.name.trim(),
           role: i === 0 ? 'leader' : 'worker',
-          specialty: a.specialty.trim() || undefined,
-          system_prompt: a.system_prompt.trim() || undefined,
+          claude_md: a.claude_md.trim() || undefined,
         })),
       };
       const team = await teamsApi.create(teamReq);
@@ -184,23 +188,17 @@ export function TeamBuilderPage() {
                 </div>
               </div>
               <div className="mt-3">
-                <label className="mb-1 block text-xs text-slate-400">Specialty</label>
-                <input
-                  value={agent.specialty}
-                  onChange={(e) => updateAgent(i, 'specialty', e.target.value)}
-                  className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                  placeholder="e.g. frontend development, testing, code review"
-                />
-              </div>
-              <div className="mt-3">
-                <label className="mb-1 block text-xs text-slate-400">System Prompt</label>
+                <label className="mb-1 block text-xs text-slate-400">CLAUDE.md Content</label>
                 <textarea
-                  value={agent.system_prompt}
-                  onChange={(e) => updateAgent(i, 'system_prompt', e.target.value)}
-                  rows={2}
-                  className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                  placeholder="Instructions for the agent..."
+                  value={agent.claude_md}
+                  onChange={(e) => updateAgent(i, 'claude_md', e.target.value)}
+                  rows={6}
+                  className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 font-mono text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  placeholder="# Agent instructions in Markdown..."
                 />
+                <p className="mt-1 text-xs text-slate-500">
+                  This content will be written to the agent's CLAUDE.md file at deploy time.
+                </p>
               </div>
             </div>
           ))}
@@ -231,18 +229,18 @@ export function TeamBuilderPage() {
             <h3 className="mb-3 text-sm font-medium text-slate-300">Agents ({agents.length})</h3>
             <div className="space-y-2">
               {agents.map((agent, i) => (
-                <div key={agent.id} className="flex items-center justify-between rounded bg-slate-900/50 px-3 py-2 text-sm">
-                  <div>
+                <div key={agent.id} className="rounded bg-slate-900/50 px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between">
                     <span className="text-white">{agent.name}</span>
-                    {agent.specialty && (
-                      <span className="ml-2 text-xs text-slate-500">{agent.specialty}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
                     <span className={`rounded-full px-2 py-0.5 text-xs ${i === 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-400'}`}>
                       {i === 0 ? 'leader' : 'worker'}
                     </span>
                   </div>
+                  {agent.claude_md && (
+                    <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded bg-slate-800 p-2 font-mono text-xs text-slate-400">
+                      {agent.claude_md}
+                    </pre>
+                  )}
                 </div>
               ))}
             </div>
@@ -258,8 +256,7 @@ export function TeamBuilderPage() {
                   agents: agents.map((a, i) => ({
                     name: a.name,
                     role: i === 0 ? 'leader' : 'worker',
-                    specialty: a.specialty || undefined,
-                    system_prompt: a.system_prompt || undefined,
+                    claude_md: a.claude_md || undefined,
                   })),
                 },
                 null,

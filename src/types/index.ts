@@ -21,6 +21,7 @@ export interface Agent {
   team_id: string;
   name: string;
   role: AgentRole;
+  claude_md: string;
   specialty: string;
   system_prompt: string;
   skills: unknown;
@@ -68,6 +69,7 @@ export interface UpdateTeamRequest {
 export interface CreateAgentInput {
   name: string;
   role?: string;
+  claude_md?: string;
   specialty?: string;
   system_prompt?: string;
   skills?: unknown;
@@ -78,6 +80,7 @@ export interface CreateAgentInput {
 export interface CreateAgentRequest {
   name: string;
   role?: string;
+  claude_md?: string;
   specialty?: string;
   system_prompt?: string;
   skills?: unknown;
@@ -88,6 +91,7 @@ export interface CreateAgentRequest {
 export interface UpdateAgentRequest {
   name?: string;
   role?: string;
+  claude_md?: string;
   specialty?: string;
   system_prompt?: string;
   skills?: unknown;

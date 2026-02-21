@@ -89,10 +89,35 @@ export const chatApi = {
     }),
 };
 
+export interface MessagesListOptions {
+  types?: string[];
+  before?: string;
+  limit?: number;
+}
+
 export const messagesApi = {
-  list: (teamId: string, limit = 50) => {
-    const params = new URLSearchParams({ limit: String(limit) });
-    return request<TaskLog[]>(`/api/teams/${teamId}/messages?${params}`);
+  list: (teamId: string, options?: MessagesListOptions) => {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.types?.length) params.set('types', options.types.join(','));
+    if (options?.before) params.set('before', options.before);
+    const qs = params.toString();
+    return request<TaskLog[]>(`/api/teams/${teamId}/messages${qs ? `?${qs}` : ''}`);
+  },
+};
+
+export interface ActivityListOptions {
+  before?: string;
+  limit?: number;
+}
+
+export const activityApi = {
+  list: (teamId: string, options?: ActivityListOptions) => {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.before) params.set('before', options.before);
+    const qs = params.toString();
+    return request<TaskLog[]>(`/api/teams/${teamId}/activity${qs ? `?${qs}` : ''}`);
   },
 };
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { teamsApi, agentsApi, chatApi, messagesApi, settingsApi } from './api';
+import { teamsApi, agentsApi, chatApi, messagesApi, activityApi, settingsApi } from './api';
 import { mockTeam, mockAgent, mockTaskLog, mockSetting, createFetchMock } from '../test/mocks';
 
 beforeEach(() => {
@@ -105,19 +105,60 @@ describe('chatApi', () => {
 });
 
 describe('messagesApi', () => {
-  it('lists messages with default limit', async () => {
+  it('lists messages with no options', async () => {
     global.fetch = createFetchMock({ '/messages': { body: [mockTaskLog] } });
     const result = await messagesApi.list('team-uuid-1');
     expect(result).toEqual([mockTaskLog]);
     const url = vi.mocked(fetch).mock.calls[0][0] as string;
-    expect(url).toContain('limit=50');
+    expect(url).toContain('/messages');
+    expect(url).not.toContain('?');
   });
 
-  it('lists messages with custom limit', async () => {
+  it('lists messages with limit option', async () => {
     global.fetch = createFetchMock({ '/messages': { body: [] } });
-    await messagesApi.list('team-uuid-1', 10);
+    await messagesApi.list('team-uuid-1', { limit: 10 });
     const url = vi.mocked(fetch).mock.calls[0][0] as string;
     expect(url).toContain('limit=10');
+  });
+
+  it('lists messages with types filter', async () => {
+    global.fetch = createFetchMock({ '/messages': { body: [] } });
+    await messagesApi.list('team-uuid-1', { types: ['user_message', 'task_result'] });
+    const url = vi.mocked(fetch).mock.calls[0][0] as string;
+    expect(url).toContain('types=user_message');
+    expect(url).toContain('task_result');
+  });
+
+  it('lists messages with before cursor', async () => {
+    global.fetch = createFetchMock({ '/messages': { body: [] } });
+    await messagesApi.list('team-uuid-1', { before: '2026-01-01T00:00:00Z' });
+    const url = vi.mocked(fetch).mock.calls[0][0] as string;
+    expect(url).toContain('before=');
+  });
+});
+
+describe('activityApi', () => {
+  it('lists activity with no options', async () => {
+    global.fetch = createFetchMock({ '/activity': { body: [mockTaskLog] } });
+    const result = await activityApi.list('team-uuid-1');
+    expect(result).toEqual([mockTaskLog]);
+    const url = vi.mocked(fetch).mock.calls[0][0] as string;
+    expect(url).toContain('/activity');
+    expect(url).not.toContain('?');
+  });
+
+  it('lists activity with limit', async () => {
+    global.fetch = createFetchMock({ '/activity': { body: [] } });
+    await activityApi.list('team-uuid-1', { limit: 20 });
+    const url = vi.mocked(fetch).mock.calls[0][0] as string;
+    expect(url).toContain('limit=20');
+  });
+
+  it('lists activity with before cursor', async () => {
+    global.fetch = createFetchMock({ '/activity': { body: [] } });
+    await activityApi.list('team-uuid-1', { before: '2026-01-01T00:00:00Z' });
+    const url = vi.mocked(fetch).mock.calls[0][0] as string;
+    expect(url).toContain('before=');
   });
 });
 

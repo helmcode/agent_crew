@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Team, TaskLog, ContainerStatus } from '../types';
-import { teamsApi, messagesApi, chatApi } from '../services/api';
+import { teamsApi, messagesApi, activityApi, chatApi } from '../services/api';
 import { connectTeamActivity, type ConnectionState } from '../services/websocket';
 import { StatusBadge } from '../components/StatusBadge';
 import { MarkdownRenderer } from '../components/Markdown';
@@ -13,7 +13,13 @@ const messageTypeColors: Record<string, string> = {
   agent_response: 'text-cyan-400',
   tool_call: 'text-yellow-400',
   tool_result: 'text-green-400',
+  task_result: 'text-green-400',
+  task_assignment: 'text-purple-400',
+  question: 'text-amber-400',
+  context_share: 'text-teal-400',
+  system_command: 'text-orange-400',
   status: 'text-slate-400',
+  status_update: 'text-slate-400',
   error: 'text-red-400',
 };
 
@@ -30,6 +36,10 @@ function formatPayload(payload: unknown): string {
 }
 
 const CHAT_TYPES = new Set(['user_message', 'agent_response', 'error', 'task_result']);
+
+function isInterAgentMessage(msg: TaskLog): boolean {
+  return !!msg.from_agent && !!msg.to_agent && msg.from_agent !== 'user' && msg.to_agent !== 'user';
+}
 
 // innerPayload extracts the actual message payload from a TaskLog.
 // The relay stores the full protocol.Message as TaskLog.payload, so the
@@ -97,13 +107,42 @@ function getChatText(msg: TaskLog): string {
   }
 }
 
+function formatActivityPayload(msg: TaskLog): string {
+  const inner = innerPayload(msg);
+  switch (msg.message_type) {
+    case 'task_assignment':
+      if (typeof inner.instruction === 'string' && inner.instruction) return inner.instruction;
+      break;
+    case 'task_result':
+      if (typeof inner.result === 'string' && inner.result) return inner.result;
+      if (typeof inner.error === 'string' && inner.error) return inner.error;
+      if (typeof inner.status === 'string') return `Task ${inner.status}`;
+      break;
+    case 'question':
+      if (typeof inner.question === 'string' && inner.question) return inner.question;
+      break;
+    case 'context_share':
+      if (typeof inner.content === 'string' && inner.content) return inner.content;
+      break;
+    case 'system_command': {
+      if (typeof inner.command === 'string' && inner.command) {
+        const args = inner.args ? ` ${JSON.stringify(inner.args)}` : '';
+        return `${inner.command}${args}`;
+      }
+      break;
+    }
+  }
+  return formatPayload(msg.payload);
+}
+
 export function TeamMonitorPage() {
   const { id } = useParams<{ id: string }>();
   const teamId = id!;
   const navigate = useNavigate();
 
   const [team, setTeam] = useState<Team | null>(null);
-  const [messages, setMessages] = useState<TaskLog[]>([]);
+  const [chatMessages, setChatMessages] = useState<TaskLog[]>([]);
+  const [activityMessages, setActivityMessages] = useState<TaskLog[]>([]);
   const [wsState, setWsState] = useState<ConnectionState>('disconnected');
   const [chatMessage, setChatMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -118,9 +157,10 @@ export function TeamMonitorPage() {
   const activityContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [activityAutoScroll, setActivityAutoScroll] = useState(true);
-  // Track previous message count to only scroll when NEW messages arrive,
+  // Track previous message counts to only scroll when NEW messages arrive,
   // not on every render cycle (e.g. caused by team status polling).
-  const prevMessagesCountRef = useRef(0);
+  const prevChatCountRef = useRef(0);
+  const prevActivityCountRef = useRef(0);
 
   const fetchTeam = useCallback(async () => {
     try {
@@ -138,7 +178,13 @@ export function TeamMonitorPage() {
       const sorted = (data ?? []).sort(
         (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
       );
-      setMessages(sorted);
+      setChatMessages(sorted);
+    }).catch(() => {});
+    activityApi.list(teamId).then((data) => {
+      const sorted = (data ?? []).sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+      setActivityMessages(sorted);
     }).catch(() => {});
     const interval = setInterval(fetchTeam, 10000);
     return () => clearInterval(interval);
@@ -155,49 +201,61 @@ export function TeamMonitorPage() {
         ) {
           setWaitingForReply(false);
         }
-        setMessages((prev) => {
-          // Already present — skip
+
+        // Route to activity panel (all message types)
+        setActivityMessages((prev) => {
           if (prev.some((m) => m.id === log.id)) return prev;
-
-          // For real user messages, replace a matching optimistic placeholder
-          if (log.message_type === 'user_message' && log.from_agent === 'user') {
-            const incoming = log.payload as Record<string, unknown>;
-            const content = typeof incoming?.content === 'string' ? incoming.content : null;
-            if (content) {
-              const idx = prev.findIndex(
-                (m) =>
-                  m.id.startsWith('optimistic-') &&
-                  m.message_type === 'user_message' &&
-                  (m.payload as Record<string, unknown>)?.content === content,
-              );
-              if (idx !== -1) {
-                const next = [...prev];
-                next[idx] = log;
-                return next;
-              }
-            }
-          }
-
           return [...prev, log].slice(-500);
         });
+
+        // Route to chat panel (chat-relevant types only)
+        if (CHAT_TYPES.has(log.message_type)) {
+          setChatMessages((prev) => {
+            if (prev.some((m) => m.id === log.id)) return prev;
+
+            // For real user messages, replace a matching optimistic placeholder
+            if (log.message_type === 'user_message' && log.from_agent === 'user') {
+              const incoming = log.payload as Record<string, unknown>;
+              const content = typeof incoming?.content === 'string' ? incoming.content : null;
+              if (content) {
+                const idx = prev.findIndex(
+                  (m) =>
+                    m.id.startsWith('optimistic-') &&
+                    m.message_type === 'user_message' &&
+                    (m.payload as Record<string, unknown>)?.content === content,
+                );
+                if (idx !== -1) {
+                  const next = [...prev];
+                  next[idx] = log;
+                  return next;
+                }
+              }
+            }
+
+            return [...prev, log].slice(-500);
+          });
+        }
       },
       onStateChange: setWsState,
     });
     return disconnect;
   }, [teamId]);
 
-  // Auto-scroll chat and activity panels only when new messages arrive.
-  // Using a ref to track the previous count prevents scroll jitter caused by
-  // team-status polling (fetchTeam → setTeam) which triggers re-renders without
-  // actually adding new messages to the list.
+  // Auto-scroll chat panel when new messages arrive.
   useEffect(() => {
-    const currentCount = messages.length;
-    if (currentCount > prevMessagesCountRef.current) {
-      prevMessagesCountRef.current = currentCount;
+    if (chatMessages.length > prevChatCountRef.current) {
+      prevChatCountRef.current = chatMessages.length;
       if (autoScroll) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, autoScroll]);
+
+  // Auto-scroll activity panel when new messages arrive.
+  useEffect(() => {
+    if (activityMessages.length > prevActivityCountRef.current) {
+      prevActivityCountRef.current = activityMessages.length;
       if (activityAutoScroll) activityEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, autoScroll, activityAutoScroll]);
+  }, [activityMessages, activityAutoScroll]);
 
   function handleChatScroll() {
     const el = chatContainerRef.current;
@@ -233,14 +291,14 @@ export function TeamMonitorPage() {
       payload: { content: text },
       created_at: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, optimistic]);
+    setChatMessages((prev) => [...prev, optimistic]);
     setChatMessage('');
     setWaitingForReply(true);
     try {
       await chatApi.send(teamId, { message: text });
     } catch (err) {
       // Remove optimistic message on failure
-      setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+      setChatMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       setWaitingForReply(false);
       setChatMessage(text);
       toast('error', friendlyError(err, 'Failed to send message. Please try again.'));
@@ -249,22 +307,15 @@ export function TeamMonitorPage() {
     }
   }
 
-  // Sort ascending (oldest first) before filtering
-  const sortedMessages = [...messages].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-  );
-
-  const filteredMessages = sortedMessages.filter((msg) => {
+  const filteredActivity = activityMessages.filter((msg) => {
     if (msg.message_type === 'status_update') return false;
     if (filterAgent !== 'all' && msg.from_agent !== filterAgent) return false;
     if (filterType !== 'all' && msg.message_type !== filterType) return false;
     return true;
   });
 
-  const chatMessages = sortedMessages.filter((m) => CHAT_TYPES.has(m.message_type));
-
-  const agentNames = [...new Set(messages.map((m) => m.from_agent).filter(Boolean))];
-  const messageTypes = [...new Set(messages.map((m) => m.message_type).filter(Boolean))];
+  const agentNames = [...new Set(activityMessages.map((m) => m.from_agent).filter(Boolean))];
+  const messageTypes = [...new Set(activityMessages.map((m) => m.message_type).filter(Boolean))];
 
   const connectionColors: Record<ConnectionState, string> = {
     connected: 'bg-green-400',
@@ -334,6 +385,7 @@ export function TeamMonitorPage() {
             <h3 className="text-sm font-medium text-white">Chat</h3>
           </div>
           <div
+            data-testid="chat-messages"
             ref={chatContainerRef}
             onScroll={handleChatScroll}
             className="flex-1 overflow-y-auto p-4"
@@ -459,33 +511,52 @@ export function TeamMonitorPage() {
             </div>
           </div>
           <div
+            data-testid="activity-messages"
             ref={activityContainerRef}
             onScroll={handleActivityScroll}
             className="flex-1 overflow-y-auto p-4 font-mono text-sm"
           >
-            {filteredMessages.length === 0 ? (
+            {filteredActivity.length === 0 ? (
               <p className="text-center text-sm text-slate-500">No activity yet</p>
             ) : (
-              filteredMessages.map((msg) => (
-                <div key={msg.id} className="mb-2 rounded bg-slate-900/50 px-3 py-2">
-                  <div className="mb-1 flex items-center gap-2 text-xs">
-                    <span className={messageTypeColors[msg.message_type] ?? 'text-slate-400'}>
-                      [{msg.message_type}]
-                    </span>
-                    {msg.from_agent && (
-                      <span className="text-slate-500">
-                        {msg.from_agent}{msg.to_agent ? ` \u2192 ${msg.to_agent}` : ''}
+              filteredActivity.map((msg) => {
+                const interAgent = isInterAgentMessage(msg);
+                return (
+                  <div
+                    key={msg.id}
+                    className={`mb-2 rounded px-3 py-2 ${
+                      interAgent
+                        ? 'border-l-2 border-purple-500/50 bg-purple-950/30'
+                        : 'bg-slate-900/50'
+                    }`}
+                  >
+                    <div className="mb-1 flex items-center gap-2 text-xs">
+                      <span className={messageTypeColors[msg.message_type] ?? 'text-slate-400'}>
+                        [{msg.message_type}]
                       </span>
-                    )}
-                    <span className="ml-auto text-slate-600">
-                      {new Date(msg.created_at).toLocaleTimeString()}
-                    </span>
+                      {interAgent && (
+                        <span
+                          data-testid="inter-agent-badge"
+                          className="rounded-full bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-medium text-purple-300"
+                        >
+                          inter-agent
+                        </span>
+                      )}
+                      {msg.from_agent && (
+                        <span className="text-slate-500">
+                          {msg.from_agent}{msg.to_agent ? ` \u2192 ${msg.to_agent}` : ''}
+                        </span>
+                      )}
+                      <span className="ml-auto text-slate-600">
+                        {new Date(msg.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <pre className="whitespace-pre-wrap break-words text-xs text-slate-300">
+                      {interAgent ? formatActivityPayload(msg) : formatPayload(msg.payload)}
+                    </pre>
                   </div>
-                  <pre className="whitespace-pre-wrap break-words text-xs text-slate-300">
-                    {formatPayload(msg.payload)}
-                  </pre>
-                </div>
-              ))
+                );
+              })
             )}
             <div ref={activityEndRef} />
           </div>

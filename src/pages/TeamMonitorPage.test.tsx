@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TeamMonitorPage } from './TeamMonitorPage';
@@ -16,10 +16,16 @@ vi.mock('../services/websocket', () => ({
   },
 }));
 
-function mockFetch(messagesBody: unknown[] = []) {
+function mockFetch(messagesBody: unknown[] = [], activityBody: unknown[] = []) {
   return vi.fn(async (input: string | URL | Request) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
+    if (url.includes('/activity')) {
+      return new Response(JSON.stringify(activityBody), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     if (url.includes('/messages')) {
       return new Response(JSON.stringify(messagesBody), {
         status: 200,
@@ -41,6 +47,62 @@ function mockFetch(messagesBody: unknown[] = []) {
     return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
   });
 }
+
+// Inter-agent message fixtures
+const interAgentAssignment = {
+  ...mockTaskLog,
+  id: 'log-ia-assign-1',
+  from_agent: 'leader',
+  to_agent: 'worker-1',
+  message_type: 'task_assignment',
+  payload: { instruction: 'Refactor the auth module' },
+};
+
+const interAgentResult = {
+  ...mockTaskLog,
+  id: 'log-ia-result-1',
+  from_agent: 'worker-1',
+  to_agent: 'leader',
+  message_type: 'task_result',
+  payload: { status: 'completed', result: 'Auth module refactored' },
+};
+
+const interAgentQuestion = {
+  ...mockTaskLog,
+  id: 'log-ia-question-1',
+  from_agent: 'worker-2',
+  to_agent: 'leader',
+  message_type: 'question',
+  payload: { question: 'Should I use JWT or sessions?' },
+};
+
+const interAgentContextShare = {
+  ...mockTaskLog,
+  id: 'log-ia-ctx-1',
+  from_agent: 'leader',
+  to_agent: 'worker-2',
+  message_type: 'context_share',
+  payload: { content: 'Use JWT for stateless auth' },
+};
+
+const interAgentSystemCommand = {
+  ...mockTaskLog,
+  id: 'log-ia-cmd-1',
+  from_agent: 'leader',
+  to_agent: 'worker-1',
+  message_type: 'system_command',
+  payload: { command: 'restart', args: { service: 'api' } },
+};
+
+// User-to-agent message (NOT inter-agent)
+const userToAgentMsg = {
+  ...mockTaskLog,
+  id: 'log-user-agent-1',
+  from_agent: 'user',
+  to_agent: 'leader',
+  message_type: 'user_message',
+  payload: { content: 'Start the deployment' },
+};
 
 // Tool-call logs that only appear in the activity feed (not chat panel)
 const toolLog1 = {
@@ -124,7 +186,7 @@ describe('TeamMonitorPage', () => {
   });
 
   it('renders initial messages from API', async () => {
-    global.fetch = mockFetch([toolLog1]);
+    global.fetch = mockFetch([], [toolLog1]);
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('Running lint check')).toBeInTheDocument();
@@ -148,7 +210,7 @@ describe('TeamMonitorPage', () => {
   });
 
   it('filters messages by agent', async () => {
-    global.fetch = mockFetch([toolLog1, toolLog2]);
+    global.fetch = mockFetch([], [toolLog1, toolLog2]);
     renderPage();
 
     await waitFor(() => {
@@ -164,7 +226,7 @@ describe('TeamMonitorPage', () => {
   });
 
   it('filters messages by type', async () => {
-    global.fetch = mockFetch([toolLog1, toolLog2]);
+    global.fetch = mockFetch([], [toolLog1, toolLog2]);
     renderPage();
 
     await waitFor(() => {
@@ -228,7 +290,7 @@ describe('TeamMonitorPage', () => {
       },
     };
 
-    global.fetch = mockFetch([nestedMsg]);
+    global.fetch = mockFetch([nestedMsg], [nestedMsg]);
     renderPage();
 
     await waitFor(() => {
@@ -257,7 +319,7 @@ describe('TeamMonitorPage', () => {
       },
     };
 
-    global.fetch = mockFetch([emptyResultMsg]);
+    global.fetch = mockFetch([emptyResultMsg], [emptyResultMsg]);
     renderPage();
 
     await waitFor(() => {
@@ -285,7 +347,7 @@ describe('TeamMonitorPage', () => {
       },
     };
 
-    global.fetch = mockFetch([nestedResponse]);
+    global.fetch = mockFetch([nestedResponse], [nestedResponse]);
     renderPage();
 
     await waitFor(() => {
@@ -439,6 +501,9 @@ describe('TeamMonitorPage', () => {
           headers: { 'Content-Type': 'application/json' },
         });
       }
+      if (url.includes('/activity')) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
       if (url.includes('/messages')) {
         return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
@@ -473,6 +538,9 @@ describe('TeamMonitorPage', () => {
         await new Promise((r) => setTimeout(r, 100));
         return new Response(JSON.stringify({ status: 'queued' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
+      if (url.includes('/activity')) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
       if (url.includes('/messages')) {
         return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
@@ -506,11 +574,12 @@ describe('TeamMonitorPage', () => {
     await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Replace me');
     await userEvent.click(screen.getByText('Send'));
 
+    const chatPanel = screen.getByTestId('chat-messages');
     await waitFor(() => {
-      expect(screen.getAllByText('Replace me').length).toBeGreaterThanOrEqual(1);
+      expect(within(chatPanel).getAllByText('Replace me').length).toBeGreaterThanOrEqual(1);
     });
 
-    const beforeCount = screen.getAllByText('Replace me').length;
+    const beforeCount = within(chatPanel).getAllByText('Replace me').length;
 
     // Simulate the real message arriving via WebSocket — should replace the optimistic one
     act(() => {
@@ -524,9 +593,9 @@ describe('TeamMonitorPage', () => {
       });
     });
 
-    // Count should not increase (optimistic was replaced, not duplicated)
+    // Count in chat panel should not increase (optimistic was replaced, not duplicated)
     await waitFor(() => {
-      const afterCount = screen.getAllByText('Replace me').length;
+      const afterCount = within(chatPanel).getAllByText('Replace me').length;
       expect(afterCount).toBeLessThanOrEqual(beforeCount);
     });
   });
@@ -568,7 +637,7 @@ describe('TeamMonitorPage', () => {
       payload: { content: 'API key is invalid' },
     };
 
-    global.fetch = mockFetch([errorMsg]);
+    global.fetch = mockFetch([errorMsg], [errorMsg]);
     renderPage();
 
     await waitFor(() => {
@@ -605,5 +674,129 @@ describe('TeamMonitorPage', () => {
     await waitFor(() => {
       expect(input).toHaveValue('');
     });
+  });
+
+  // --- Inter-agent message rendering tests ---
+
+  it('renders inter-agent messages with distinct badge and styling', async () => {
+    global.fetch = mockFetch([], [interAgentAssignment]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Refactor the auth module')).toBeInTheDocument();
+    });
+
+    // Should show the inter-agent badge
+    expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
+    expect(screen.getByTestId('inter-agent-badge')).toHaveTextContent('inter-agent');
+
+    // Should show the [task_assignment] type badge
+    expect(screen.getByText('[task_assignment]')).toBeInTheDocument();
+
+    // Should show from → to
+    expect(screen.getByText(/leader.*→.*worker-1/)).toBeInTheDocument();
+  });
+
+  it('does not show inter-agent badge for user-to-agent messages', async () => {
+    global.fetch = mockFetch([userToAgentMsg], [userToAgentMsg]);
+    renderPage();
+
+    await waitFor(() => {
+      const activityPanel = screen.getByTestId('activity-messages');
+      expect(within(activityPanel).getByText('Start the deployment')).toBeInTheDocument();
+    });
+
+    // Should NOT show the inter-agent badge (from_agent is 'user')
+    expect(screen.queryByTestId('inter-agent-badge')).not.toBeInTheDocument();
+  });
+
+  it('renders inter-agent task_result with extracted result text', async () => {
+    global.fetch = mockFetch([], [interAgentResult]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Auth module refactored')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
+  });
+
+  it('renders inter-agent question with extracted question text', async () => {
+    global.fetch = mockFetch([], [interAgentQuestion]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Should I use JWT or sessions?')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
+  });
+
+  it('renders inter-agent context_share with extracted content', async () => {
+    global.fetch = mockFetch([], [interAgentContextShare]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Use JWT for stateless auth')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
+  });
+
+  it('renders inter-agent system_command with command and args', async () => {
+    global.fetch = mockFetch([], [interAgentSystemCommand]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/restart/)).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
+  });
+
+  it('renders multiple inter-agent messages with correct badges', async () => {
+    global.fetch = mockFetch([], [interAgentAssignment, interAgentResult, interAgentQuestion]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Refactor the auth module')).toBeInTheDocument();
+      expect(screen.getByText('Auth module refactored')).toBeInTheDocument();
+      expect(screen.getByText('Should I use JWT or sessions?')).toBeInTheDocument();
+    });
+
+    // All three should have inter-agent badges
+    const badges = screen.getAllByTestId('inter-agent-badge');
+    expect(badges).toHaveLength(3);
+  });
+
+  it('shows inter-agent messages via WebSocket with distinct styling', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    act(() => {
+      wsOnMessage?.(interAgentAssignment);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Refactor the auth module')).toBeInTheDocument();
+      expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
+    });
+  });
+
+  it('applies purple styling to inter-agent message container', async () => {
+    global.fetch = mockFetch([], [interAgentAssignment]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Refactor the auth module')).toBeInTheDocument();
+    });
+
+    // The container should have purple border styling
+    const container = screen.getByText('Refactor the auth module').closest('.border-l-2');
+    expect(container).toBeTruthy();
+    expect(container?.classList.contains('border-purple-500/50')).toBe(true);
   });
 });

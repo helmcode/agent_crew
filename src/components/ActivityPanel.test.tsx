@@ -234,3 +234,61 @@ describe('LiveActivityFeed', () => {
     expect(screen.getAllByTestId('live-activity-item')).toHaveLength(1);
   });
 });
+
+describe('getEventSummary edge cases (via components)', () => {
+  it('shows "Thinking..." for assistant event without action', () => {
+    const log = makeActivityLog({
+      eventOverrides: { event_type: 'assistant', action: undefined, tool_name: undefined },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+  });
+
+  it('shows "Thinking..." for assistant event with empty string action', () => {
+    const log = makeActivityLog({
+      eventOverrides: { event_type: 'assistant', action: '', tool_name: undefined },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+  });
+
+  it('shows action text for tool_use without tool_name', () => {
+    const log = makeActivityLog({
+      eventOverrides: { event_type: 'tool_use', tool_name: undefined, action: 'running tests' },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('running tests')).toBeInTheDocument();
+  });
+
+  it('shows "Tool call" for tool_use without tool_name and action', () => {
+    const log = makeActivityLog({
+      eventOverrides: { event_type: 'tool_use', tool_name: undefined, action: undefined },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Tool call')).toBeInTheDocument();
+  });
+
+  it('shows "Error occurred" for error event without action', () => {
+    const log = makeActivityLog({
+      eventOverrides: { event_type: 'error', action: undefined, tool_name: undefined },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Error occurred')).toBeInTheDocument();
+  });
+
+  it('shows "Error occurred" for error event with empty action', () => {
+    const log = makeActivityLog({
+      eventOverrides: { event_type: 'error', action: '', tool_name: undefined },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Error occurred')).toBeInTheDocument();
+  });
+
+  it('shows "Tool result" for tool_result without tool_name', () => {
+    const log = makeActivityLog({
+      eventOverrides: { event_type: 'tool_result', tool_name: undefined },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Tool result')).toBeInTheDocument();
+  });
+});

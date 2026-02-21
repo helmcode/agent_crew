@@ -662,6 +662,84 @@ describe('TeamBuilderPage', () => {
     const optionValues = Array.from(options).map((o) => o.value);
     expect(optionValues).toEqual(['inherit', 'sonnet', 'opus', 'haiku']);
   });
+});
 
+describe('TeamBuilderPage — skill interactions', () => {
+  async function goToStep2WithSubAgent() {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+  }
+
+  it('removes a skill by clicking the × button', async () => {
+    await goToStep2WithSubAgent();
+    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+
+    await userEvent.type(skillInput, 'my-skill{Enter}');
+    expect(screen.getByText('my-skill')).toBeInTheDocument();
+
+    // Click the × button inside the skill chip
+    const skillSpan = screen.getByText('my-skill').closest('span');
+    const removeBtn = skillSpan!.querySelector('button')!;
+    await userEvent.click(removeBtn);
+
+    expect(screen.queryByText('my-skill')).not.toBeInTheDocument();
+  });
+
+  it('adds a skill via comma key', async () => {
+    await goToStep2WithSubAgent();
+    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+
+    await userEvent.type(skillInput, 'comma-skill,');
+
+    await waitFor(() => {
+      expect(screen.getByText('comma-skill')).toBeInTheDocument();
+    });
+  });
+
+  it('removes last skill on Backspace when input is empty', async () => {
+    await goToStep2WithSubAgent();
+    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+
+    await userEvent.type(skillInput, 'skill-one{Enter}');
+    await userEvent.type(skillInput, 'skill-two{Enter}');
+
+    expect(screen.getByText('skill-one')).toBeInTheDocument();
+    expect(screen.getByText('skill-two')).toBeInTheDocument();
+
+    // Backspace on empty input removes the last skill
+    await userEvent.type(skillInput, '{Backspace}');
+
+    await waitFor(() => {
+      expect(screen.queryByText('skill-two')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('skill-one')).toBeInTheDocument();
+  });
+
+  it('silently ignores duplicate skills', async () => {
+    await goToStep2WithSubAgent();
+    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+
+    await userEvent.type(skillInput, 'dupe-skill{Enter}');
+    await userEvent.type(skillInput, 'dupe-skill{Enter}');
+
+    // Only one instance should be present
+    const matches = screen.getAllByText('dupe-skill');
+    expect(matches).toHaveLength(1);
+  });
+
+  it('adds pending skill on blur', async () => {
+    await goToStep2WithSubAgent();
+    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+
+    await userEvent.type(skillInput, 'blur-skill');
+    // Trigger blur by tabbing away
+    await userEvent.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText('blur-skill')).toBeInTheDocument();
+    });
+  });
 });
 

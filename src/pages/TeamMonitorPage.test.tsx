@@ -859,4 +859,117 @@ describe('TeamMonitorPage', () => {
     expect(container?.classList.contains('border-l-2')).toBeFalsy();
     expect(container?.classList.contains('border-purple-500/50')).toBeFalsy();
   });
+
+  // --- Live activity events cap ---
+
+  it('caps live activity events at 50', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    // Send 55 activity events
+    act(() => {
+      for (let i = 0; i < 55; i++) {
+        wsOnMessage?.({
+          ...mockActivityEventLog,
+          id: `activity-cap-${i}`,
+        });
+      }
+    });
+
+    await waitFor(() => {
+      const items = screen.getAllByTestId('live-activity-item');
+      expect(items).toHaveLength(50);
+    });
+  });
+
+  // --- Chat input validation ---
+
+  it('shows red border on empty message submit', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    await userEvent.click(screen.getByText('Send'));
+
+    const input = screen.getByPlaceholderText('Send a message...');
+    expect(input).toHaveClass('border-red-500');
+  });
+
+  it('sends message via Enter key', async () => {
+    const fetchMock = mockFetch();
+    global.fetch = fetchMock;
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Enter key test{Enter}');
+
+    await waitFor(() => {
+      const chatCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.includes('/chat') && call[1]?.method === 'POST';
+      });
+      expect(chatCall).toBeTruthy();
+    });
+  });
+
+  // --- Error "Go to Settings" navigation ---
+
+  it('navigates to settings when "Go to Settings" is clicked', async () => {
+    const errorMsg = {
+      ...mockTaskLog,
+      id: 'err-settings-1',
+      from_agent: 'lead',
+      to_agent: 'user',
+      message_type: 'error',
+      payload: { content: 'API key is invalid' },
+    };
+
+    global.fetch = mockFetch([errorMsg], [errorMsg]);
+
+    render(
+      <MemoryRouter initialEntries={['/teams/team-uuid-2']}>
+        <Routes>
+          <Route path="/teams/:id" element={<TeamMonitorPage />} />
+          <Route path="/settings" element={<div data-testid="settings-page">Settings</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Go to Settings')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByText('Go to Settings'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+    });
+  });
+
+  // --- Stopped team disables chat ---
+
+  it('disables chat input and send button when team is stopped', async () => {
+    const stoppedTeam = { ...mockRunningTeam, status: 'stopped' as const };
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/activity')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/messages')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/api/teams/')) return new Response(JSON.stringify(stoppedTeam), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).toBeDisabled();
+    });
+    expect(screen.getByText('Send')).toBeDisabled();
+  });
 });

@@ -215,7 +215,10 @@ describe('Frontend-Backend Integration', () => {
         method: 'POST',
         body: JSON.stringify({
           name: 'deploy-test-team',
-          agents: [{ name: 'deploy-agent', role: 'worker' }],
+          agents: [
+            { name: 'deploy-leader', role: 'leader' },
+            { name: 'deploy-agent', role: 'worker' },
+          ],
         }),
       });
       teamId = data.id;
@@ -275,7 +278,10 @@ describe('Frontend-Backend Integration', () => {
         method: 'POST',
         body: JSON.stringify({
           name: 'del-running-team',
-          agents: [{ name: 'agent-dr' }],
+          agents: [
+            { name: 'del-leader', role: 'leader' },
+            { name: 'agent-dr', role: 'worker' },
+          ],
         }),
       });
       await api(`/api/teams/${team.id}/deploy`, { method: 'POST' });
@@ -303,7 +309,10 @@ describe('Frontend-Backend Integration', () => {
         method: 'POST',
         body: JSON.stringify({
           name: 'chat-test-team',
-          agents: [{ name: 'chat-agent' }],
+          agents: [
+            { name: 'chat-leader', role: 'leader' },
+            { name: 'chat-agent', role: 'worker' },
+          ],
         }),
       });
       teamId = data.id;

@@ -11,9 +11,8 @@ interface AgentDraft {
   name: string;
   claude_md: string;
   sub_agent_description: string;
-  sub_agent_tools: string;
+  sub_agent_skills: string[];
   sub_agent_model: string;
-  sub_agent_permission_mode: string;
 }
 
 const MAX_NAME_LENGTH = 255;
@@ -33,9 +32,14 @@ function generateSubAgentPreview(agent: AgentDraft): string {
   const lines = ['---'];
   lines.push(`name: ${agent.name || '{name}'}`);
   if (agent.sub_agent_description) lines.push(`description: ${agent.sub_agent_description}`);
-  if (agent.sub_agent_tools) lines.push(`tools: ${agent.sub_agent_tools}`);
   if (agent.sub_agent_model && agent.sub_agent_model !== 'inherit') lines.push(`model: ${agent.sub_agent_model}`);
-  if (agent.sub_agent_permission_mode && agent.sub_agent_permission_mode !== 'default') lines.push(`permissionMode: ${agent.sub_agent_permission_mode}`);
+  lines.push('background: true');
+  lines.push('isolation: worktree');
+  lines.push('permissionMode: bypassPermissions');
+  if (agent.sub_agent_skills.length > 0) {
+    lines.push('skills:');
+    agent.sub_agent_skills.forEach((s) => lines.push(`  - ${s}`));
+  }
   lines.push('---');
   return lines.join('\n');
 }
@@ -61,11 +65,13 @@ export function TeamBuilderPage() {
       name: '',
       claude_md: defaultClaudeMd(''),
       sub_agent_description: '',
-      sub_agent_tools: '',
+      sub_agent_skills: [],
       sub_agent_model: 'inherit',
-      sub_agent_permission_mode: 'default',
     },
   ]);
+
+  // Transient skill input text per agent (keyed by agent.id)
+  const [skillInputs, setSkillInputs] = useState<Record<string, string>>({});
 
   function addAgent() {
     setAgents([...agents, {
@@ -73,9 +79,8 @@ export function TeamBuilderPage() {
       name: '',
       claude_md: '',
       sub_agent_description: '',
-      sub_agent_tools: '',
+      sub_agent_skills: [],
       sub_agent_model: 'inherit',
-      sub_agent_permission_mode: 'default',
     }]);
   }
 
@@ -85,6 +90,36 @@ export function TeamBuilderPage() {
 
   function updateAgent(index: number, field: keyof AgentDraft, value: string) {
     setAgents(agents.map((a, i) => (i === index ? { ...a, [field]: value } : a)));
+  }
+
+  function addSkill(agentIndex: number) {
+    const agentId = agents[agentIndex].id;
+    const raw = skillInputs[agentId] ?? '';
+    const skill = raw.replace(/,\s*$/, '').trim();
+    if (!skill) return;
+    setAgents(agents.map((a, i) => {
+      if (i !== agentIndex || a.sub_agent_skills.includes(skill)) return a;
+      return { ...a, sub_agent_skills: [...a.sub_agent_skills, skill] };
+    }));
+    setSkillInputs({ ...skillInputs, [agentId]: '' });
+  }
+
+  function removeSkill(agentIndex: number, skill: string) {
+    setAgents(agents.map((a, i) =>
+      i === agentIndex ? { ...a, sub_agent_skills: a.sub_agent_skills.filter((s) => s !== skill) } : a,
+    ));
+  }
+
+  function handleSkillKeyDown(agentIndex: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    const agentId = agents[agentIndex].id;
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addSkill(agentIndex);
+    } else if (e.key === 'Backspace' && !(skillInputs[agentId] ?? '') && agents[agentIndex].sub_agent_skills.length > 0) {
+      setAgents(agents.map((a, i) =>
+        i === agentIndex ? { ...a, sub_agent_skills: a.sub_agent_skills.slice(0, -1) } : a,
+      ));
+    }
   }
 
   function canProceed(): boolean {
@@ -118,9 +153,8 @@ export function TeamBuilderPage() {
             name: a.name.trim(),
             role: 'worker' as const,
             sub_agent_description: a.sub_agent_description.trim() || undefined,
-            sub_agent_tools: a.sub_agent_tools.trim() || undefined,
+            sub_agent_skills: a.sub_agent_skills.length > 0 ? a.sub_agent_skills : undefined,
             sub_agent_model: a.sub_agent_model !== 'inherit' ? a.sub_agent_model : undefined,
-            sub_agent_permission_mode: a.sub_agent_permission_mode !== 'default' ? a.sub_agent_permission_mode : undefined,
           };
         }),
       };
@@ -275,41 +309,43 @@ export function TeamBuilderPage() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-slate-400">Tools</label>
-                    <input
-                      value={agent.sub_agent_tools}
-                      onChange={(e) => updateAgent(i, 'sub_agent_tools', e.target.value)}
-                      className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                      placeholder="Read, Write, Bash, Glob, Grep"
-                    />
-                    <p className="mt-1 text-xs text-slate-500">Comma-separated list of tools available to this sub-agent.</p>
+                    <label className="mb-1 block text-xs text-slate-400">Skills</label>
+                    <div className="flex min-h-[34px] flex-wrap items-center gap-1.5 rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5">
+                      {agent.sub_agent_skills.map((skill) => (
+                        <span key={skill} className="flex items-center gap-1 rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-200">
+                          {skill}
+                          <button
+                            type="button"
+                            onClick={() => removeSkill(i, skill)}
+                            className="leading-none text-slate-400 hover:text-white"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        value={skillInputs[agent.id] ?? ''}
+                        onChange={(e) => setSkillInputs({ ...skillInputs, [agent.id]: e.target.value })}
+                        onKeyDown={(e) => handleSkillKeyDown(i, e)}
+                        onBlur={() => addSkill(i)}
+                        className="min-w-[120px] flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+                        placeholder={agent.sub_agent_skills.length === 0 ? 'Add skill and press Enter' : ''}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">Press Enter to add each skill (e.g. Read, Write, Bash).</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-xs text-slate-400">Model</label>
-                      <select
-                        value={agent.sub_agent_model}
-                        onChange={(e) => updateAgent(i, 'sub_agent_model', e.target.value)}
-                        className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                      >
-                        <option value="inherit">Inherit (default)</option>
-                        <option value="sonnet">Sonnet</option>
-                        <option value="opus">Opus</option>
-                        <option value="haiku">Haiku</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-slate-400">Permission Mode</label>
-                      <select
-                        value={agent.sub_agent_permission_mode}
-                        onChange={(e) => updateAgent(i, 'sub_agent_permission_mode', e.target.value)}
-                        className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-                      >
-                        <option value="default">Default</option>
-                        <option value="acceptEdits">Accept Edits</option>
-                        <option value="bypassPermissions">Bypass Permissions</option>
-                      </select>
-                    </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">Model</label>
+                    <select
+                      value={agent.sub_agent_model}
+                      onChange={(e) => updateAgent(i, 'sub_agent_model', e.target.value)}
+                      className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="inherit">Inherit (default)</option>
+                      <option value="sonnet">Sonnet</option>
+                      <option value="opus">Opus</option>
+                      <option value="haiku">Haiku</option>
+                    </select>
                   </div>
                 </div>
               )}
@@ -383,9 +419,8 @@ export function TeamBuilderPage() {
                       name: a.name,
                       role: 'worker',
                       sub_agent_description: a.sub_agent_description || undefined,
-                      sub_agent_tools: a.sub_agent_tools || undefined,
+                      sub_agent_skills: a.sub_agent_skills.length > 0 ? a.sub_agent_skills : undefined,
                       sub_agent_model: a.sub_agent_model !== 'inherit' ? a.sub_agent_model : undefined,
-                      sub_agent_permission_mode: a.sub_agent_permission_mode !== 'default' ? a.sub_agent_permission_mode : undefined,
                     };
                   }),
                 },

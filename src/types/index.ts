@@ -30,9 +30,8 @@ export interface Agent {
   container_id: string;
   container_status: ContainerStatus;
   sub_agent_description?: string;
-  sub_agent_tools?: string;
+  sub_agent_skills?: string[];
   sub_agent_model?: string;
-  sub_agent_permission_mode?: string;
   created_at: string;
   updated_at: string;
 }
@@ -75,9 +74,8 @@ export interface CreateAgentInput {
   role?: 'leader' | 'worker';
   claude_md?: string;
   sub_agent_description?: string;
-  sub_agent_tools?: string;
+  sub_agent_skills?: string[];
   sub_agent_model?: string;
-  sub_agent_permission_mode?: string;
 }
 
 export interface CreateAgentRequest {
@@ -85,9 +83,8 @@ export interface CreateAgentRequest {
   role?: 'leader' | 'worker';
   claude_md?: string;
   sub_agent_description?: string;
-  sub_agent_tools?: string;
+  sub_agent_skills?: string[];
   sub_agent_model?: string;
-  sub_agent_permission_mode?: string;
 }
 
 export interface UpdateAgentRequest {
@@ -95,9 +92,8 @@ export interface UpdateAgentRequest {
   role?: 'leader' | 'worker';
   claude_md?: string;
   sub_agent_description?: string;
-  sub_agent_tools?: string;
+  sub_agent_skills?: string[];
   sub_agent_model?: string;
-  sub_agent_permission_mode?: string;
 }
 
 export interface ChatRequest {

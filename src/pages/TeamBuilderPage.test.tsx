@@ -296,9 +296,8 @@ describe('TeamBuilderPage', () => {
 
     // Sub-agent should show structured fields
     expect(screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Read, Write, Bash, Glob, Grep')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Add skill and press Enter')).toBeInTheDocument();
     expect(screen.getByText('Inherit (default)')).toBeInTheDocument();
-    expect(screen.getByText('Default')).toBeInTheDocument();
 
     // Sub-agent should NOT have CLAUDE.md textarea (only 1 from the leader)
     const claudeTextareas = screen.getAllByPlaceholderText('# Agent instructions in Markdown...');
@@ -366,7 +365,10 @@ describe('TeamBuilderPage', () => {
       screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
       'Handles backend API tasks',
     );
-    await userEvent.type(screen.getByPlaceholderText('Read, Write, Bash, Glob, Grep'), 'Read, Bash, Edit');
+    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+    await userEvent.type(skillInput, 'Read{Enter}');
+    await userEvent.type(skillInput, 'Bash{Enter}');
+    await userEvent.type(skillInput, 'Edit{Enter}');
 
     // Change model to sonnet
     await userEvent.selectOptions(screen.getByDisplayValue('Inherit (default)'), 'sonnet');
@@ -390,7 +392,7 @@ describe('TeamBuilderPage', () => {
       // Worker should have sub-agent fields, not claude_md
       expect(body.agents[1].role).toBe('worker');
       expect(body.agents[1].sub_agent_description).toBe('Handles backend API tasks');
-      expect(body.agents[1].sub_agent_tools).toBe('Read, Bash, Edit');
+      expect(body.agents[1].sub_agent_skills).toEqual(['Read', 'Bash', 'Edit']);
       expect(body.agents[1].sub_agent_model).toBe('sonnet');
       expect(body.agents[1]).not.toHaveProperty('claude_md');
     });
@@ -434,7 +436,7 @@ describe('TeamBuilderPage', () => {
       expect(createCall).toBeTruthy();
       const body = JSON.parse(createCall![1]!.body as string);
       expect(body.agents[1].sub_agent_model).toBeUndefined();
-      expect(body.agents[1].sub_agent_permission_mode).toBeUndefined();
+      expect(body.agents[1].sub_agent_skills).toBeUndefined();
     });
   });
 
@@ -468,7 +470,9 @@ describe('TeamBuilderPage', () => {
       screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
       'Builds frontend components',
     );
-    await userEvent.type(screen.getByPlaceholderText('Read, Write, Bash, Glob, Grep'), 'Read, Write');
+    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+    await userEvent.type(skillInput, 'Read{Enter}');
+    await userEvent.type(skillInput, 'Write{Enter}');
     await userEvent.selectOptions(screen.getByDisplayValue('Inherit (default)'), 'opus');
 
     await userEvent.click(screen.getByText('Next'));
@@ -478,8 +482,13 @@ describe('TeamBuilderPage', () => {
     expect(preview.textContent).toContain('---');
     expect(preview.textContent).toContain('name: my-worker');
     expect(preview.textContent).toContain('description: Builds frontend components');
-    expect(preview.textContent).toContain('tools: Read, Write');
     expect(preview.textContent).toContain('model: opus');
+    expect(preview.textContent).toContain('background: true');
+    expect(preview.textContent).toContain('isolation: worktree');
+    expect(preview.textContent).toContain('permissionMode: bypassPermissions');
+    expect(preview.textContent).toContain('skills:');
+    expect(preview.textContent).toContain('  - Read');
+    expect(preview.textContent).toContain('  - Write');
   });
 
   it('shows JSON preview in step 3 with claude_md field', async () => {
@@ -604,19 +613,5 @@ describe('TeamBuilderPage', () => {
     expect(optionValues).toEqual(['inherit', 'sonnet', 'opus', 'haiku']);
   });
 
-  it('shows permission mode dropdown with correct options for sub-agents', async () => {
-    renderPage();
-    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
-    await userEvent.click(screen.getByText('Next'));
-
-    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
-
-    // Find the permission mode select (the one showing "Default")
-    const permSelect = screen.getByDisplayValue('Default');
-    expect(permSelect).toBeInTheDocument();
-
-    const options = permSelect.querySelectorAll('option');
-    const optionValues = Array.from(options).map((o) => o.value);
-    expect(optionValues).toEqual(['default', 'acceptEdits', 'bypassPermissions']);
-  });
 });
+

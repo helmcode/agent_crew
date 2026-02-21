@@ -10,6 +10,10 @@ interface AgentDraft {
   id: string;
   name: string;
   claude_md: string;
+  sub_agent_description: string;
+  sub_agent_tools: string;
+  sub_agent_model: string;
+  sub_agent_permission_mode: string;
 }
 
 const MAX_NAME_LENGTH = 255;
@@ -17,6 +21,23 @@ const MAX_NAME_LENGTH = 255;
 function isValidName(name: string): boolean {
   const trimmed = name.trim();
   return trimmed.length > 0 && trimmed.length <= MAX_NAME_LENGTH;
+}
+
+function autoGrow(e: React.FormEvent<HTMLTextAreaElement>) {
+  const el = e.currentTarget;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+}
+
+function generateSubAgentPreview(agent: AgentDraft): string {
+  const lines = ['---'];
+  lines.push(`name: ${agent.name || '{name}'}`);
+  if (agent.sub_agent_description) lines.push(`description: ${agent.sub_agent_description}`);
+  if (agent.sub_agent_tools) lines.push(`tools: ${agent.sub_agent_tools}`);
+  if (agent.sub_agent_model && agent.sub_agent_model !== 'inherit') lines.push(`model: ${agent.sub_agent_model}`);
+  if (agent.sub_agent_permission_mode && agent.sub_agent_permission_mode !== 'default') lines.push(`permissionMode: ${agent.sub_agent_permission_mode}`);
+  lines.push('---');
+  return lines.join('\n');
 }
 
 export function TeamBuilderPage() {
@@ -30,31 +51,51 @@ export function TeamBuilderPage() {
   const [workspacePath, setWorkspacePath] = useState('');
 
   // Step 2: Agents
-  function defaultClaudeMd(name: string, role: string): string {
-    return `# Agent: ${name || '{name}'}\n\n## Role\n${role}\n\n## Instructions\nDescribe the agent's instructions here.\n`;
+  function defaultClaudeMd(name: string): string {
+    return `# Agent: ${name || '{name}'}\n\n## Role\nDescribe the leader's role here.\n\n## Instructions\nDescribe the leader's instructions here.\n\n## Team\nList the sub-agents available to you.\n`;
   }
 
   const [agents, setAgents] = useState<AgentDraft[]>([
-    { id: generateId(), name: '', claude_md: defaultClaudeMd('', 'leader') },
+    {
+      id: generateId(),
+      name: '',
+      claude_md: defaultClaudeMd(''),
+      sub_agent_description: '',
+      sub_agent_tools: '',
+      sub_agent_model: 'inherit',
+      sub_agent_permission_mode: 'default',
+    },
   ]);
 
   function addAgent() {
-    const index = agents.length;
-    const role = index === 0 ? 'leader' : 'worker';
-    setAgents([...agents, { id: generateId(), name: '', claude_md: defaultClaudeMd('', role) }]);
+    setAgents([...agents, {
+      id: generateId(),
+      name: '',
+      claude_md: '',
+      sub_agent_description: '',
+      sub_agent_tools: '',
+      sub_agent_model: 'inherit',
+      sub_agent_permission_mode: 'default',
+    }]);
   }
 
   function removeAgent(index: number) {
     setAgents(agents.filter((_, i) => i !== index));
   }
 
-  function updateAgent(index: number, field: keyof AgentDraft, value: string | string[]) {
+  function updateAgent(index: number, field: keyof AgentDraft, value: string) {
     setAgents(agents.map((a, i) => (i === index ? { ...a, [field]: value } : a)));
   }
 
   function canProceed(): boolean {
     if (step === 1) return isValidName(teamName);
-    if (step === 2) return agents.length > 0 && agents.every((a) => isValidName(a.name));
+    if (step === 2) {
+      return agents.length > 0 && agents.every((a, i) => {
+        if (!isValidName(a.name)) return false;
+        if (i > 0 && !a.sub_agent_description.trim()) return false;
+        return true;
+      });
+    }
     return true;
   }
 
@@ -65,11 +106,23 @@ export function TeamBuilderPage() {
         name: teamName.trim(),
         description: description.trim() || undefined,
         workspace_path: workspacePath.trim() || undefined,
-        agents: agents.map((a, i) => ({
-          name: a.name.trim(),
-          role: i === 0 ? 'leader' : 'worker',
-          claude_md: a.claude_md.trim() || undefined,
-        })),
+        agents: agents.map((a, i) => {
+          if (i === 0) {
+            return {
+              name: a.name.trim(),
+              role: 'leader' as const,
+              claude_md: a.claude_md.trim() || undefined,
+            };
+          }
+          return {
+            name: a.name.trim(),
+            role: 'worker' as const,
+            sub_agent_description: a.sub_agent_description.trim() || undefined,
+            sub_agent_tools: a.sub_agent_tools.trim() || undefined,
+            sub_agent_model: a.sub_agent_model !== 'inherit' ? a.sub_agent_model : undefined,
+            sub_agent_permission_mode: a.sub_agent_permission_mode !== 'default' ? a.sub_agent_permission_mode : undefined,
+          };
+        }),
       };
       const team = await teamsApi.create(teamReq);
 
@@ -133,8 +186,9 @@ export function TeamBuilderPage() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              onInput={autoGrow}
               rows={3}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              className="min-h-[80px] max-h-[400px] w-full resize-none overflow-y-auto rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               placeholder="What does this team do?"
             />
           </div>
@@ -157,8 +211,10 @@ export function TeamBuilderPage() {
           {agents.map((agent, i) => (
             <div key={agent.id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
               <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-300">Agent {i + 1}</span>
-                {agents.length > 1 && i !== 0 && (
+                <span className="text-sm font-medium text-slate-300">
+                  {i === 0 ? 'Leader Agent' : `Sub-Agent ${i}`}
+                </span>
+                {i > 0 && (
                   <button
                     onClick={() => removeAgent(i)}
                     className="text-xs text-red-400 hover:text-red-300"
@@ -181,32 +237,89 @@ export function TeamBuilderPage() {
                 <div>
                   <label className="mb-1 block text-xs text-slate-400">Role</label>
                   <div className="flex h-[34px] items-center">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${i === 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-400'}`}>
-                      {i === 0 ? 'Leader' : 'Worker'}
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${i === 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-teal-500/20 text-teal-400'}`}>
+                      {i === 0 ? 'Leader' : 'Sub-Agent'}
                     </span>
                   </div>
                 </div>
               </div>
-              <div className="mt-3">
-                <label className="mb-1 block text-xs text-slate-400">CLAUDE.md Content</label>
-                <textarea
-                  value={agent.claude_md}
-                  onChange={(e) => updateAgent(i, 'claude_md', e.target.value)}
-                  rows={6}
-                  className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 font-mono text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                  placeholder="# Agent instructions in Markdown..."
-                />
-                <p className="mt-1 text-xs text-slate-500">
-                  This content will be written to the agent's CLAUDE.md file at deploy time.
-                </p>
-              </div>
+
+              {i === 0 ? (
+                /* Leader: CLAUDE.md textarea */
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs text-slate-400">CLAUDE.md Content</label>
+                  <textarea
+                    value={agent.claude_md}
+                    onChange={(e) => updateAgent(i, 'claude_md', e.target.value)}
+                    onInput={autoGrow}
+                    rows={6}
+                    className="min-h-[80px] max-h-[400px] w-full resize-none overflow-y-auto rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 font-mono text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    placeholder="# Agent instructions in Markdown..."
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    This content will be written to the agent's CLAUDE.md file at deploy time.
+                  </p>
+                </div>
+              ) : (
+                /* Sub-agent: structured fields */
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">Description *</label>
+                    <textarea
+                      value={agent.sub_agent_description}
+                      onChange={(e) => updateAgent(i, 'sub_agent_description', e.target.value)}
+                      onInput={autoGrow}
+                      rows={2}
+                      className="min-h-[80px] max-h-[400px] w-full resize-none overflow-y-auto rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      placeholder="What does this sub-agent do? The leader uses this to decide when to invoke it."
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">Tools</label>
+                    <input
+                      value={agent.sub_agent_tools}
+                      onChange={(e) => updateAgent(i, 'sub_agent_tools', e.target.value)}
+                      className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      placeholder="Read, Write, Bash, Glob, Grep"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Comma-separated list of tools available to this sub-agent.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-400">Model</label>
+                      <select
+                        value={agent.sub_agent_model}
+                        onChange={(e) => updateAgent(i, 'sub_agent_model', e.target.value)}
+                        className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                      >
+                        <option value="inherit">Inherit (default)</option>
+                        <option value="sonnet">Sonnet</option>
+                        <option value="opus">Opus</option>
+                        <option value="haiku">Haiku</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-400">Permission Mode</label>
+                      <select
+                        value={agent.sub_agent_permission_mode}
+                        onChange={(e) => updateAgent(i, 'sub_agent_permission_mode', e.target.value)}
+                        className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                      >
+                        <option value="default">Default</option>
+                        <option value="acceptEdits">Accept Edits</option>
+                        <option value="bypassPermissions">Bypass Permissions</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           <button
             onClick={addAgent}
             className="w-full rounded-lg border border-dashed border-slate-600 py-2.5 text-sm text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-300"
           >
-            + Add Agent
+            + Add Sub-Agent
           </button>
         </div>
       )}
@@ -232,13 +345,18 @@ export function TeamBuilderPage() {
                 <div key={agent.id} className="rounded bg-slate-900/50 px-3 py-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-white">{agent.name}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${i === 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700 text-slate-400'}`}>
-                      {i === 0 ? 'leader' : 'worker'}
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${i === 0 ? 'bg-blue-500/20 text-blue-400' : 'bg-teal-500/20 text-teal-400'}`}>
+                      {i === 0 ? 'leader' : 'sub-agent'}
                     </span>
                   </div>
-                  {agent.claude_md && (
+                  {i === 0 && agent.claude_md && (
                     <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded bg-slate-800 p-2 font-mono text-xs text-slate-400">
                       {agent.claude_md}
+                    </pre>
+                  )}
+                  {i > 0 && (
+                    <pre data-testid={`sub-agent-preview-${agent.name || i}`} className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-slate-800 p-2 font-mono text-xs text-slate-400">
+                      {generateSubAgentPreview(agent)}
                     </pre>
                   )}
                 </div>
@@ -253,11 +371,23 @@ export function TeamBuilderPage() {
                   name: teamName,
                   description: description || undefined,
                   workspace_path: workspacePath || undefined,
-                  agents: agents.map((a, i) => ({
-                    name: a.name,
-                    role: i === 0 ? 'leader' : 'worker',
-                    claude_md: a.claude_md || undefined,
-                  })),
+                  agents: agents.map((a, i) => {
+                    if (i === 0) {
+                      return {
+                        name: a.name,
+                        role: 'leader',
+                        claude_md: a.claude_md || undefined,
+                      };
+                    }
+                    return {
+                      name: a.name,
+                      role: 'worker',
+                      sub_agent_description: a.sub_agent_description || undefined,
+                      sub_agent_tools: a.sub_agent_tools || undefined,
+                      sub_agent_model: a.sub_agent_model !== 'inherit' ? a.sub_agent_model : undefined,
+                      sub_agent_permission_mode: a.sub_agent_permission_mode !== 'default' ? a.sub_agent_permission_mode : undefined,
+                    };
+                  }),
                 },
                 null,
                 2,

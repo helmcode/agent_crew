@@ -17,6 +17,7 @@ export const mockAgent: Agent = {
   team_id: 'team-uuid-1',
   name: 'test-agent',
   role: 'leader',
+  claude_md: '# Leader Agent\n\nYou coordinate the team.',
   specialty: 'testing',
   system_prompt: 'You are a test agent',
   skills: ['coding', 'testing'],
@@ -24,8 +25,24 @@ export const mockAgent: Agent = {
   resources: {},
   container_id: '',
   container_status: 'stopped',
+  sub_agent_description: undefined,
+  sub_agent_tools: undefined,
+  sub_agent_model: undefined,
+  sub_agent_permission_mode: undefined,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+};
+
+export const mockWorkerAgent: Agent = {
+  ...mockAgent,
+  id: 'agent-uuid-worker',
+  name: 'worker-agent',
+  role: 'worker',
+  claude_md: 'You handle backend tasks.',
+  sub_agent_description: 'Handles backend API development and database operations',
+  sub_agent_tools: 'Read, Grep, Bash, Edit',
+  sub_agent_model: 'sonnet',
+  sub_agent_permission_mode: 'acceptEdits',
 };
 
 export const mockRunningTeam: Team = {
@@ -34,8 +51,8 @@ export const mockRunningTeam: Team = {
   name: 'running-team',
   status: 'running',
   agents: [
-    mockAgent,
-    { ...mockAgent, id: 'agent-uuid-2', name: 'worker-agent', role: 'worker', container_status: 'running' },
+    { ...mockAgent, container_status: 'running' },
+    { ...mockWorkerAgent, id: 'agent-uuid-2' },
   ],
 };
 

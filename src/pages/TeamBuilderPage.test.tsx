@@ -47,20 +47,20 @@ describe('TeamBuilderPage', () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
-    expect(screen.getByText('Agent 1')).toBeInTheDocument();
+    expect(screen.getByText('Leader Agent')).toBeInTheDocument();
   });
 
-  it('can add and remove agents in step 2', async () => {
+  it('can add and remove sub-agents in step 2', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
 
-    await userEvent.click(screen.getByText('+ Add Agent'));
-    expect(screen.getByText('Agent 2')).toBeInTheDocument();
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    expect(screen.getByText('Sub-Agent 1')).toBeInTheDocument();
 
     const removeButtons = screen.getAllByText('Remove');
     await userEvent.click(removeButtons[0]);
-    expect(screen.queryByText('Agent 2')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sub-Agent 1')).not.toBeInTheDocument();
   });
 
   it('goes back from step 2 to step 1', async () => {
@@ -264,7 +264,7 @@ describe('TeamBuilderPage', () => {
     });
   });
 
-  it('shows CLAUDE.md editor in step 2', async () => {
+  it('shows CLAUDE.md editor for leader in step 2', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
@@ -284,20 +284,28 @@ describe('TeamBuilderPage', () => {
     expect((textarea as HTMLTextAreaElement).value).toContain('## Role');
     expect((textarea as HTMLTextAreaElement).value).toContain('leader');
     expect((textarea as HTMLTextAreaElement).value).toContain('## Instructions');
+    expect((textarea as HTMLTextAreaElement).value).toContain('## Team');
   });
 
-  it('pre-populates worker agent with worker role template', async () => {
+  it('shows structured fields for sub-agent instead of CLAUDE.md', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
 
-    await userEvent.click(screen.getByText('+ Add Agent'));
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
 
-    const textareas = screen.getAllByPlaceholderText('# Agent instructions in Markdown...');
-    expect((textareas[1] as HTMLTextAreaElement).value).toContain('worker');
+    // Sub-agent should show structured fields
+    expect(screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Read, Write, Bash, Glob, Grep')).toBeInTheDocument();
+    expect(screen.getByText('Inherit (default)')).toBeInTheDocument();
+    expect(screen.getByText('Default')).toBeInTheDocument();
+
+    // Sub-agent should NOT have CLAUDE.md textarea (only 1 from the leader)
+    const claudeTextareas = screen.getAllByPlaceholderText('# Agent instructions in Markdown...');
+    expect(claudeTextareas).toHaveLength(1);
   });
 
-  it('includes claude_md in create payload', async () => {
+  it('includes claude_md in create payload for leader', async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       const method = init?.method ?? 'GET';
@@ -331,7 +339,106 @@ describe('TeamBuilderPage', () => {
     });
   });
 
-  it('shows CLAUDE.md preview in step 3 review', async () => {
+  it('includes sub-agent fields in create payload for workers', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? 'GET';
+      if (method === 'POST' && url.endsWith('/api/teams')) {
+        return new Response(JSON.stringify(mockTeam), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+
+    // Fill leader
+    const nameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(nameInputs[0], 'leader');
+
+    // Add sub-agent
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    const allNameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(allNameInputs[1], 'worker-1');
+    await userEvent.type(
+      screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
+      'Handles backend API tasks',
+    );
+    await userEvent.type(screen.getByPlaceholderText('Read, Write, Bash, Glob, Grep'), 'Read, Bash, Edit');
+
+    // Change model to sonnet
+    await userEvent.selectOptions(screen.getByDisplayValue('Inherit (default)'), 'sonnet');
+
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.endsWith('/api/teams') && call[1]?.method === 'POST';
+      });
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(createCall![1]!.body as string);
+
+      // Leader should have claude_md, not sub-agent fields
+      expect(body.agents[0].role).toBe('leader');
+      expect(body.agents[0]).toHaveProperty('claude_md');
+      expect(body.agents[0]).not.toHaveProperty('sub_agent_description');
+
+      // Worker should have sub-agent fields, not claude_md
+      expect(body.agents[1].role).toBe('worker');
+      expect(body.agents[1].sub_agent_description).toBe('Handles backend API tasks');
+      expect(body.agents[1].sub_agent_tools).toBe('Read, Bash, Edit');
+      expect(body.agents[1].sub_agent_model).toBe('sonnet');
+      expect(body.agents[1]).not.toHaveProperty('claude_md');
+    });
+  });
+
+  it('omits default model and permission mode from worker payload', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? 'GET';
+      if (method === 'POST' && url.endsWith('/api/teams')) {
+        return new Response(JSON.stringify(mockTeam), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+
+    const nameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(nameInputs[0], 'leader');
+
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    const allNameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(allNameInputs[1], 'worker-1');
+    await userEvent.type(
+      screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
+      'A sub-agent',
+    );
+    // Leave model as inherit and permission as default
+
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.endsWith('/api/teams') && call[1]?.method === 'POST';
+      });
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(createCall![1]!.body as string);
+      expect(body.agents[1].sub_agent_model).toBeUndefined();
+      expect(body.agents[1].sub_agent_permission_mode).toBeUndefined();
+    });
+  });
+
+  it('shows CLAUDE.md preview in step 3 review for leader', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
     await userEvent.click(screen.getByText('Next'));
@@ -340,11 +447,39 @@ describe('TeamBuilderPage', () => {
     await userEvent.click(screen.getByText('Next'));
 
     // The review should show the CLAUDE.md content in a pre block
-    // Text appears in both the review preview and JSON preview, so use getAllByText
     const agentHeadings = screen.getAllByText(/# Agent:/);
     expect(agentHeadings.length).toBeGreaterThanOrEqual(1);
     const instructionHeadings = screen.getAllByText(/## Instructions/);
     expect(instructionHeadings.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows sub-agent YAML frontmatter preview in step 3', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+
+    const nameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(nameInputs[0], 'leader');
+
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    const allNameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(allNameInputs[1], 'my-worker');
+    await userEvent.type(
+      screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
+      'Builds frontend components',
+    );
+    await userEvent.type(screen.getByPlaceholderText('Read, Write, Bash, Glob, Grep'), 'Read, Write');
+    await userEvent.selectOptions(screen.getByDisplayValue('Inherit (default)'), 'opus');
+
+    await userEvent.click(screen.getByText('Next'));
+
+    // Sub-agent preview should show YAML frontmatter
+    const preview = screen.getByTestId('sub-agent-preview-my-worker');
+    expect(preview.textContent).toContain('---');
+    expect(preview.textContent).toContain('name: my-worker');
+    expect(preview.textContent).toContain('description: Builds frontend components');
+    expect(preview.textContent).toContain('tools: Read, Write');
+    expect(preview.textContent).toContain('model: opus');
   });
 
   it('shows JSON preview in step 3 with claude_md field', async () => {
@@ -395,7 +530,7 @@ describe('TeamBuilderPage', () => {
     });
   });
 
-  it('assigns leader role to first agent and worker to subsequent', async () => {
+  it('assigns leader role to first agent and sub-agent to subsequent', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
@@ -404,8 +539,8 @@ describe('TeamBuilderPage', () => {
     expect(screen.getByText('Leader')).toBeInTheDocument();
 
     // Add second agent
-    await userEvent.click(screen.getByText('+ Add Agent'));
-    expect(screen.getByText('Worker')).toBeInTheDocument();
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    expect(screen.getByText('Sub-Agent')).toBeInTheDocument();
   });
 
   it('disables Next in step 2 when agent name is empty', async () => {
@@ -414,6 +549,23 @@ describe('TeamBuilderPage', () => {
     await userEvent.click(screen.getByText('Next'));
 
     // Agent name is empty, Next should be disabled
+    expect(screen.getByText('Next')).toBeDisabled();
+  });
+
+  it('disables Next in step 2 when sub-agent description is empty', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    // Fill leader name
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+
+    // Add a sub-agent with name but no description
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    const allNameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(allNameInputs[1], 'worker');
+
+    // Next should be disabled because sub-agent description is required
     expect(screen.getByText('Next')).toBeDisabled();
   });
 
@@ -434,5 +586,37 @@ describe('TeamBuilderPage', () => {
     await userEvent.clear(textarea);
     await userEvent.type(textarea, '# My custom agent config');
     expect((textarea as HTMLTextAreaElement).value).toBe('# My custom agent config');
+  });
+
+  it('shows model dropdown with correct options for sub-agents', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+
+    const modelSelect = screen.getByDisplayValue('Inherit (default)');
+    expect(modelSelect).toBeInTheDocument();
+
+    // Verify all model options
+    const options = modelSelect.querySelectorAll('option');
+    const optionValues = Array.from(options).map((o) => o.value);
+    expect(optionValues).toEqual(['inherit', 'sonnet', 'opus', 'haiku']);
+  });
+
+  it('shows permission mode dropdown with correct options for sub-agents', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+
+    // Find the permission mode select (the one showing "Default")
+    const permSelect = screen.getByDisplayValue('Default');
+    expect(permSelect).toBeInTheDocument();
+
+    const options = permSelect.querySelectorAll('option');
+    const optionValues = Array.from(options).map((o) => o.value);
+    expect(optionValues).toEqual(['default', 'acceptEdits', 'bypassPermissions']);
   });
 });

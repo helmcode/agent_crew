@@ -29,6 +29,10 @@ export interface Agent {
   resources: unknown;
   container_id: string;
   container_status: ContainerStatus;
+  sub_agent_description?: string;
+  sub_agent_tools?: string;
+  sub_agent_model?: string;
+  sub_agent_permission_mode?: string;
   created_at: string;
   updated_at: string;
 }
@@ -68,35 +72,32 @@ export interface UpdateTeamRequest {
 
 export interface CreateAgentInput {
   name: string;
-  role?: string;
+  role?: 'leader' | 'worker';
   claude_md?: string;
-  specialty?: string;
-  system_prompt?: string;
-  skills?: unknown;
-  permissions?: unknown;
-  resources?: unknown;
+  sub_agent_description?: string;
+  sub_agent_tools?: string;
+  sub_agent_model?: string;
+  sub_agent_permission_mode?: string;
 }
 
 export interface CreateAgentRequest {
   name: string;
-  role?: string;
+  role?: 'leader' | 'worker';
   claude_md?: string;
-  specialty?: string;
-  system_prompt?: string;
-  skills?: unknown;
-  permissions?: unknown;
-  resources?: unknown;
+  sub_agent_description?: string;
+  sub_agent_tools?: string;
+  sub_agent_model?: string;
+  sub_agent_permission_mode?: string;
 }
 
 export interface UpdateAgentRequest {
   name?: string;
-  role?: string;
+  role?: 'leader' | 'worker';
   claude_md?: string;
-  specialty?: string;
-  system_prompt?: string;
-  skills?: unknown;
-  permissions?: unknown;
-  resources?: unknown;
+  sub_agent_description?: string;
+  sub_agent_tools?: string;
+  sub_agent_model?: string;
+  sub_agent_permission_mode?: string;
 }
 
 export interface ChatRequest {

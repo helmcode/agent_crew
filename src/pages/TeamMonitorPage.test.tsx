@@ -3,7 +3,7 @@ import { render, screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TeamMonitorPage } from './TeamMonitorPage';
-import { mockRunningTeam, mockTaskLog } from '../test/mocks';
+import { mockRunningTeam, mockTaskLog, mockWorkerAgent } from '../test/mocks';
 
 let wsOnMessage: ((log: unknown) => void) | null = null;
 let wsOnStateChange: ((state: string) => void) | null = null;
@@ -48,53 +48,7 @@ function mockFetch(messagesBody: unknown[] = [], activityBody: unknown[] = []) {
   });
 }
 
-// Inter-agent message fixtures
-const interAgentAssignment = {
-  ...mockTaskLog,
-  id: 'log-ia-assign-1',
-  from_agent: 'leader',
-  to_agent: 'worker-1',
-  message_type: 'task_assignment',
-  payload: { instruction: 'Refactor the auth module' },
-};
-
-const interAgentResult = {
-  ...mockTaskLog,
-  id: 'log-ia-result-1',
-  from_agent: 'worker-1',
-  to_agent: 'leader',
-  message_type: 'task_result',
-  payload: { status: 'completed', result: 'Auth module refactored' },
-};
-
-const interAgentQuestion = {
-  ...mockTaskLog,
-  id: 'log-ia-question-1',
-  from_agent: 'worker-2',
-  to_agent: 'leader',
-  message_type: 'question',
-  payload: { question: 'Should I use JWT or sessions?' },
-};
-
-const interAgentContextShare = {
-  ...mockTaskLog,
-  id: 'log-ia-ctx-1',
-  from_agent: 'leader',
-  to_agent: 'worker-2',
-  message_type: 'context_share',
-  payload: { content: 'Use JWT for stateless auth' },
-};
-
-const interAgentSystemCommand = {
-  ...mockTaskLog,
-  id: 'log-ia-cmd-1',
-  from_agent: 'leader',
-  to_agent: 'worker-1',
-  message_type: 'system_command',
-  payload: { command: 'restart', args: { service: 'api' } },
-};
-
-// User-to-agent message (NOT inter-agent)
+// User-to-agent message
 const userToAgentMsg = {
   ...mockTaskLog,
   id: 'log-user-agent-1',
@@ -676,127 +630,78 @@ describe('TeamMonitorPage', () => {
     });
   });
 
-  // --- Inter-agent message rendering tests ---
+  // --- Single-leader architecture: agents panel tests ---
 
-  it('renders inter-agent messages with distinct badge and styling', async () => {
-    global.fetch = mockFetch([], [interAgentAssignment]);
+  it('shows leader agent with container status dot', async () => {
+    global.fetch = mockFetch();
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Refactor the auth module')).toBeInTheDocument();
+      expect(screen.getByText('test-agent')).toBeInTheDocument();
     });
 
-    // Should show the inter-agent badge
-    expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
-    expect(screen.getByTestId('inter-agent-badge')).toHaveTextContent('inter-agent');
-
-    // Should show the [task_assignment] type badge
-    expect(screen.getByText('[task_assignment]')).toBeInTheDocument();
-
-    // Should show from → to
-    expect(screen.getByText(/leader.*→.*worker-1/)).toBeInTheDocument();
+    // Leader should have container status dot
+    expect(screen.getByTestId('agent-dot-test-agent')).toBeInTheDocument();
+    expect(screen.getByText('leader')).toBeInTheDocument();
   });
 
-  it('does not show inter-agent badge for user-to-agent messages', async () => {
-    global.fetch = mockFetch([userToAgentMsg], [userToAgentMsg]);
+  it('shows sub-agent with file icon and description instead of container dot', async () => {
+    global.fetch = mockFetch();
     renderPage();
 
     await waitFor(() => {
-      const activityPanel = screen.getByTestId('activity-messages');
-      expect(within(activityPanel).getByText('Start the deployment')).toBeInTheDocument();
+      expect(screen.getByText('worker-agent')).toBeInTheDocument();
     });
 
-    // Should NOT show the inter-agent badge (from_agent is 'user')
+    // Sub-agent should have file icon, not container dot
+    expect(screen.getByTestId('sub-agent-icon-worker-agent')).toBeInTheDocument();
+    expect(screen.queryByTestId('agent-dot-worker-agent')).not.toBeInTheDocument();
+
+    // Sub-agent should show its delegation description
+    expect(screen.getByText(mockWorkerAgent.sub_agent_description!)).toBeInTheDocument();
+  });
+
+  it('does not render inter-agent badge in activity feed', async () => {
+    const agentToAgentMsg = {
+      ...mockTaskLog,
+      id: 'log-a2a-1',
+      from_agent: 'leader',
+      to_agent: 'worker-1',
+      message_type: 'tool_call',
+      payload: { content: 'Calling tool' },
+    };
+
+    global.fetch = mockFetch([], [agentToAgentMsg]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Calling tool')).toBeInTheDocument();
+    });
+
+    // No inter-agent badge should exist in the new architecture
     expect(screen.queryByTestId('inter-agent-badge')).not.toBeInTheDocument();
   });
 
-  it('renders inter-agent task_result with extracted result text', async () => {
-    global.fetch = mockFetch([], [interAgentResult]);
+  it('renders activity messages with uniform styling (no purple borders)', async () => {
+    const msg = {
+      ...mockTaskLog,
+      id: 'log-uniform-1',
+      from_agent: 'leader',
+      to_agent: 'user',
+      message_type: 'agent_response',
+      payload: { content: 'Uniform style message' },
+    };
+
+    global.fetch = mockFetch([], [msg]);
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Auth module refactored')).toBeInTheDocument();
+      expect(screen.getByText('Uniform style message')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
-  });
-
-  it('renders inter-agent question with extracted question text', async () => {
-    global.fetch = mockFetch([], [interAgentQuestion]);
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Should I use JWT or sessions?')).toBeInTheDocument();
-    });
-
-    expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
-  });
-
-  it('renders inter-agent context_share with extracted content', async () => {
-    global.fetch = mockFetch([], [interAgentContextShare]);
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Use JWT for stateless auth')).toBeInTheDocument();
-    });
-
-    expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
-  });
-
-  it('renders inter-agent system_command with command and args', async () => {
-    global.fetch = mockFetch([], [interAgentSystemCommand]);
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText(/restart/)).toBeInTheDocument();
-    });
-
-    expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
-  });
-
-  it('renders multiple inter-agent messages with correct badges', async () => {
-    global.fetch = mockFetch([], [interAgentAssignment, interAgentResult, interAgentQuestion]);
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Refactor the auth module')).toBeInTheDocument();
-      expect(screen.getByText('Auth module refactored')).toBeInTheDocument();
-      expect(screen.getByText('Should I use JWT or sessions?')).toBeInTheDocument();
-    });
-
-    // All three should have inter-agent badges
-    const badges = screen.getAllByTestId('inter-agent-badge');
-    expect(badges).toHaveLength(3);
-  });
-
-  it('shows inter-agent messages via WebSocket with distinct styling', async () => {
-    global.fetch = mockFetch();
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByText('running-team')).toBeInTheDocument();
-    });
-
-    act(() => {
-      wsOnMessage?.(interAgentAssignment);
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText('Refactor the auth module')).toBeInTheDocument();
-      expect(screen.getByTestId('inter-agent-badge')).toBeInTheDocument();
-    });
-  });
-
-  it('applies purple styling to inter-agent message container', async () => {
-    global.fetch = mockFetch([], [interAgentAssignment]);
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Refactor the auth module')).toBeInTheDocument();
-    });
-
-    // The container should have purple border styling
-    const container = screen.getByText('Refactor the auth module').closest('.border-l-2');
-    expect(container).toBeTruthy();
-    expect(container?.classList.contains('border-purple-500/50')).toBe(true);
+    // No purple border styling should be present
+    const container = screen.getByText('Uniform style message').closest('.mb-2');
+    expect(container?.classList.contains('border-l-2')).toBeFalsy();
+    expect(container?.classList.contains('border-purple-500/50')).toBeFalsy();
   });
 });

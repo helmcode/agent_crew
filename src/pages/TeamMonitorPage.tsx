@@ -14,10 +14,6 @@ const messageTypeColors: Record<string, string> = {
   tool_call: 'text-yellow-400',
   tool_result: 'text-green-400',
   task_result: 'text-green-400',
-  task_assignment: 'text-purple-400',
-  question: 'text-amber-400',
-  context_share: 'text-teal-400',
-  system_command: 'text-orange-400',
   status: 'text-slate-400',
   status_update: 'text-slate-400',
   error: 'text-red-400',
@@ -36,10 +32,6 @@ function formatPayload(payload: unknown): string {
 }
 
 const CHAT_TYPES = new Set(['user_message', 'agent_response', 'error', 'task_result']);
-
-function isInterAgentMessage(msg: TaskLog): boolean {
-  return !!msg.from_agent && !!msg.to_agent && msg.from_agent !== 'user' && msg.to_agent !== 'user';
-}
 
 // innerPayload extracts the actual message payload from a TaskLog.
 // The relay stores the full protocol.Message as TaskLog.payload, so the
@@ -105,34 +97,6 @@ function getChatText(msg: TaskLog): string {
     default:
       return formatPayload(msg.payload);
   }
-}
-
-function formatActivityPayload(msg: TaskLog): string {
-  const inner = innerPayload(msg);
-  switch (msg.message_type) {
-    case 'task_assignment':
-      if (typeof inner.instruction === 'string' && inner.instruction) return inner.instruction;
-      break;
-    case 'task_result':
-      if (typeof inner.result === 'string' && inner.result) return inner.result;
-      if (typeof inner.error === 'string' && inner.error) return inner.error;
-      if (typeof inner.status === 'string') return `Task ${inner.status}`;
-      break;
-    case 'question':
-      if (typeof inner.question === 'string' && inner.question) return inner.question;
-      break;
-    case 'context_share':
-      if (typeof inner.content === 'string' && inner.content) return inner.content;
-      break;
-    case 'system_command': {
-      if (typeof inner.command === 'string' && inner.command) {
-        const args = inner.args ? ` ${JSON.stringify(inner.args)}` : '';
-        return `${inner.command}${args}`;
-      }
-      break;
-    }
-  }
-  return formatPayload(msg.payload);
 }
 
 export function TeamMonitorPage() {
@@ -367,9 +331,25 @@ export function TeamMonitorPage() {
             <div className="flex items-center gap-1.5">
               {team.agents.map((agent) => (
                 <div key={agent.id} className="group relative flex items-center gap-1.5 rounded-md bg-slate-900/50 px-2 py-1">
-                  <span className={`h-2 w-2 rounded-full ${dotColor[agent.container_status]} ${agent.container_status === 'running' ? 'animate-pulse' : ''}`} />
-                  <span className="text-xs text-slate-300">{agent.name}</span>
-                  <span className="text-xs text-slate-600">{agent.role}</span>
+                  {agent.role === 'leader' ? (
+                    <>
+                      <span data-testid={`agent-dot-${agent.name}`} className={`h-2 w-2 rounded-full ${dotColor[agent.container_status]} ${agent.container_status === 'running' ? 'animate-pulse' : ''}`} />
+                      <span className="text-xs text-slate-300">{agent.name}</span>
+                      <span className="text-xs text-slate-600">leader</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg data-testid={`sub-agent-icon-${agent.name}`} className="h-3 w-3 flex-shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span className="text-xs text-slate-300">{agent.name}</span>
+                      {agent.sub_agent_description && (
+                        <span className="max-w-[12rem] truncate text-xs text-slate-500" title={agent.sub_agent_description}>
+                          {agent.sub_agent_description}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -519,29 +499,15 @@ export function TeamMonitorPage() {
             {filteredActivity.length === 0 ? (
               <p className="text-center text-sm text-slate-500">No activity yet</p>
             ) : (
-              filteredActivity.map((msg) => {
-                const interAgent = isInterAgentMessage(msg);
-                return (
+              filteredActivity.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`mb-2 rounded px-3 py-2 ${
-                      interAgent
-                        ? 'border-l-2 border-purple-500/50 bg-purple-950/30'
-                        : 'bg-slate-900/50'
-                    }`}
+                    className="mb-2 rounded bg-slate-900/50 px-3 py-2"
                   >
                     <div className="mb-1 flex items-center gap-2 text-xs">
                       <span className={messageTypeColors[msg.message_type] ?? 'text-slate-400'}>
                         [{msg.message_type}]
                       </span>
-                      {interAgent && (
-                        <span
-                          data-testid="inter-agent-badge"
-                          className="rounded-full bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-medium text-purple-300"
-                        >
-                          inter-agent
-                        </span>
-                      )}
                       {msg.from_agent && (
                         <span className="text-slate-500">
                           {msg.from_agent}{msg.to_agent ? ` \u2192 ${msg.to_agent}` : ''}
@@ -552,11 +518,10 @@ export function TeamMonitorPage() {
                       </span>
                     </div>
                     <pre className="whitespace-pre-wrap break-words text-xs text-slate-300">
-                      {interAgent ? formatActivityPayload(msg) : formatPayload(msg.payload)}
+                      {formatPayload(msg.payload)}
                     </pre>
                   </div>
-                );
-              })
+                ))
             )}
             <div ref={activityEndRef} />
           </div>

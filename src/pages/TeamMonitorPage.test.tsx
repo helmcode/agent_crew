@@ -682,6 +682,102 @@ describe('TeamMonitorPage', () => {
     expect(screen.queryByTestId('inter-agent-badge')).not.toBeInTheDocument();
   });
 
+  // --- Skill status indicator tests ---
+
+  it('shows skill status indicator with all-installed state for sub-agent', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('worker-agent')).toBeInTheDocument();
+    });
+
+    // Worker agent mock has skill_statuses with 2 installed skills
+    const indicator = screen.getByTestId('skill-status-worker-agent');
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveClass('text-green-400');
+    expect(indicator.textContent).toContain('2');
+  });
+
+  it('shows skill status indicator with pending state', async () => {
+    const teamWithPending = {
+      ...mockRunningTeam,
+      agents: [
+        { ...mockRunningTeam.agents![0] },
+        {
+          ...mockWorkerAgent,
+          id: 'agent-uuid-2',
+          skill_statuses: [
+            { name: '@anthropic/tool-read', status: 'installed' },
+            { name: '@anthropic/tool-bash', status: 'pending' },
+          ],
+        },
+      ],
+    };
+
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/activity')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/messages')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/api/teams/')) return new Response(JSON.stringify(teamWithPending), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      const indicator = screen.getByTestId('skill-status-worker-agent');
+      expect(indicator).toHaveClass('text-yellow-400');
+      expect(indicator.textContent).toContain('1/2');
+    });
+  });
+
+  it('shows skill status indicator with failed state and skill names', async () => {
+    const teamWithFailed = {
+      ...mockRunningTeam,
+      agents: [
+        { ...mockRunningTeam.agents![0] },
+        {
+          ...mockWorkerAgent,
+          id: 'agent-uuid-2',
+          skill_statuses: [
+            { name: '@anthropic/tool-read', status: 'installed' },
+            { name: 'bad-skill', status: 'failed', error: 'Not found' },
+          ],
+        },
+      ],
+    };
+
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/activity')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/messages')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/api/teams/')) return new Response(JSON.stringify(teamWithFailed), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      const indicator = screen.getByTestId('skill-status-worker-agent');
+      expect(indicator).toHaveClass('text-red-400');
+      const failedNames = screen.getByTestId('skill-failed-names-worker-agent');
+      expect(failedNames.textContent).toBe('bad-skill');
+    });
+  });
+
+  it('does not show skill status indicator for leader agent', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('test-agent')).toBeInTheDocument();
+    });
+
+    // Leader agent should not have skill status indicator
+    expect(screen.queryByTestId('skill-status-test-agent')).not.toBeInTheDocument();
+  });
+
   it('renders activity messages with uniform styling (no purple borders)', async () => {
     const msg = {
       ...mockTaskLog,

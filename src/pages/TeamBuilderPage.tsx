@@ -16,6 +16,8 @@ interface AgentDraft {
 }
 
 const MAX_NAME_LENGTH = 255;
+const MAX_SKILLS_PER_AGENT = 20;
+const SKILL_NAME_PATTERN = /^[@a-zA-Z0-9][\w./-]*$/;
 
 function isValidName(name: string): boolean {
   const trimmed = name.trim();
@@ -97,6 +99,14 @@ export function TeamBuilderPage() {
     const raw = skillInputs[agentId] ?? '';
     const skill = raw.replace(/,\s*$/, '').trim();
     if (!skill) return;
+    if (!SKILL_NAME_PATTERN.test(skill)) {
+      toast('error', `Invalid skill name: "${skill}". Use alphanumeric, @scope/name, or dotted names.`);
+      return;
+    }
+    if (agents[agentIndex].sub_agent_skills.length >= MAX_SKILLS_PER_AGENT) {
+      toast('error', `Maximum ${MAX_SKILLS_PER_AGENT} skills per agent.`);
+      return;
+    }
     setAgents(agents.map((a, i) => {
       if (i !== agentIndex || a.sub_agent_skills.includes(skill)) return a;
       return { ...a, sub_agent_skills: [...a.sub_agent_skills, skill] };
@@ -332,7 +342,7 @@ export function TeamBuilderPage() {
                         placeholder={agent.sub_agent_skills.length === 0 ? 'Add skill and press Enter' : ''}
                       />
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">Press Enter to add each skill (e.g. Read, Write, Bash).</p>
+                    <p className="mt-1 text-xs text-slate-500">Press Enter to add each skill package (e.g. vercel-labs/agent-skills).</p>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-slate-400">Model</label>

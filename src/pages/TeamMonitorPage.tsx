@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import type { Team, TaskLog, ContainerStatus } from '../types';
+import type { Team, TaskLog, ContainerStatus, SkillStatus } from '../types';
 import { teamsApi, messagesApi, activityApi, chatApi } from '../services/api';
 import { connectTeamActivity, type ConnectionState } from '../services/websocket';
 import { StatusBadge } from '../components/StatusBadge';
@@ -97,6 +97,58 @@ function getChatText(msg: TaskLog): string {
     default:
       return formatPayload(msg.payload);
   }
+}
+
+function SkillStatusIndicator({ statuses, agentName }: { statuses: SkillStatus[]; agentName: string }) {
+  const failed = statuses.filter((s) => s.status === 'failed');
+  const pending = statuses.filter((s) => s.status === 'pending');
+  const installed = statuses.filter((s) => s.status === 'installed');
+
+  if (failed.length > 0) {
+    const failedNames = failed.map((s) => s.name).join(', ');
+    return (
+      <span
+        data-testid={`skill-status-${agentName}`}
+        className="flex items-center gap-1 rounded bg-red-500/10 px-1.5 py-0.5 text-xs text-red-400"
+        title={`Failed: ${failedNames}`}
+      >
+        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+        </svg>
+        <span data-testid={`skill-failed-names-${agentName}`}>{failedNames}</span>
+      </span>
+    );
+  }
+
+  if (pending.length > 0) {
+    return (
+      <span
+        data-testid={`skill-status-${agentName}`}
+        className="flex items-center gap-1 rounded bg-yellow-500/10 px-1.5 py-0.5 text-xs text-yellow-400"
+        title={`Installing ${pending.length} skill${pending.length > 1 ? 's' : ''}...`}
+      >
+        <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-400" />
+        {pending.length}/{statuses.length}
+      </span>
+    );
+  }
+
+  if (installed.length === statuses.length) {
+    return (
+      <span
+        data-testid={`skill-status-${agentName}`}
+        className="flex items-center gap-1 rounded bg-green-500/10 px-1.5 py-0.5 text-xs text-green-400"
+        title={`${installed.length} skill${installed.length > 1 ? 's' : ''} installed`}
+      >
+        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+        {installed.length}
+      </span>
+    );
+  }
+
+  return null;
 }
 
 export function TeamMonitorPage() {
@@ -347,6 +399,9 @@ export function TeamMonitorPage() {
                         <span className="max-w-[12rem] truncate text-xs text-slate-500" title={agent.sub_agent_description}>
                           {agent.sub_agent_description}
                         </span>
+                      )}
+                      {agent.skill_statuses && agent.skill_statuses.length > 0 && (
+                        <SkillStatusIndicator statuses={agent.skill_statuses} agentName={agent.name} />
                       )}
                     </>
                   )}

@@ -4,6 +4,14 @@ export type AgentRole = 'leader' | 'worker';
 
 export type ContainerStatus = 'stopped' | 'running' | 'error';
 
+export type SkillInstallState = 'pending' | 'installed' | 'failed';
+
+export interface SkillStatus {
+  name: string;
+  status: SkillInstallState;
+  error?: string;
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -25,6 +33,7 @@ export interface Agent {
   specialty: string;
   system_prompt: string;
   skills: unknown;
+  skill_statuses?: SkillStatus[];
   permissions: unknown;
   resources: unknown;
   container_id: string;

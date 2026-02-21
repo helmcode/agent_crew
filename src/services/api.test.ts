@@ -162,6 +162,27 @@ describe('activityApi', () => {
   });
 });
 
+describe('request timeout', () => {
+  it('throws "Request timed out" when fetch exceeds timeout', async () => {
+    vi.useFakeTimers();
+    global.fetch = vi.fn(() => new Promise<Response>(() => {}));
+
+    const promise = teamsApi.list();
+    vi.advanceTimersByTime(30_000);
+
+    await expect(promise).rejects.toThrow('Request timed out');
+    vi.useRealTimers();
+  });
+
+  it('clears timeout on successful response', async () => {
+    const clearSpy = vi.spyOn(global, 'clearTimeout');
+    global.fetch = createFetchMock({ '/api/teams': { body: [mockTeam] } });
+    await teamsApi.list();
+    expect(clearSpy).toHaveBeenCalled();
+    clearSpy.mockRestore();
+  });
+});
+
 describe('settingsApi', () => {
   it('lists settings', async () => {
     global.fetch = createFetchMock({ '/api/settings': { body: [mockSetting] } });

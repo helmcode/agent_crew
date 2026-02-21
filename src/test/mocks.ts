@@ -26,9 +26,8 @@ export const mockAgent: Agent = {
   container_id: '',
   container_status: 'stopped',
   sub_agent_description: undefined,
-  sub_agent_tools: undefined,
+  sub_agent_skills: undefined,
   sub_agent_model: undefined,
-  sub_agent_permission_mode: undefined,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -40,9 +39,12 @@ export const mockWorkerAgent: Agent = {
   role: 'worker',
   claude_md: 'You handle backend tasks.',
   sub_agent_description: 'Handles backend API development and database operations',
-  sub_agent_tools: 'Read, Grep, Bash, Edit',
+  sub_agent_skills: ['@anthropic/tool-read', '@anthropic/tool-bash'],
   sub_agent_model: 'sonnet',
-  sub_agent_permission_mode: 'acceptEdits',
+  skill_statuses: [
+    { name: '@anthropic/tool-read', status: 'installed' },
+    { name: '@anthropic/tool-bash', status: 'installed' },
+  ],
 };
 
 export const mockRunningTeam: Team = {

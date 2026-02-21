@@ -597,6 +597,56 @@ describe('TeamBuilderPage', () => {
     expect((textarea as HTMLTextAreaElement).value).toBe('# My custom agent config');
   });
 
+  it('rejects invalid skill names with toast error', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+    await userEvent.type(skillInput, '!!!invalid{Enter}');
+
+    // Invalid skill should not be added — input stays, toast fires
+    await waitFor(() => {
+      expect(screen.queryByText('!!!invalid')).not.toBeInTheDocument();
+    });
+  });
+
+  it('accepts valid scoped package skill names', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+    await userEvent.type(skillInput, '@anthropic/tool-read{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByText('@anthropic/tool-read')).toBeInTheDocument();
+    });
+  });
+
+  it('enforces maximum skills per agent limit', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+
+    // Add 20 skills (the max)
+    for (let i = 0; i < 20; i++) {
+      await userEvent.type(skillInput, `skill-${i}{Enter}`);
+    }
+
+    // 21st should be rejected
+    await userEvent.type(skillInput, 'skill-overflow{Enter}');
+
+    await waitFor(() => {
+      expect(screen.queryByText('skill-overflow')).not.toBeInTheDocument();
+    });
+  });
+
   it('shows model dropdown with correct options for sub-agents', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');

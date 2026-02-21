@@ -14,26 +14,40 @@ import type {
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+const REQUEST_TIMEOUT_MS = 30_000;
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    let message = `Request failed: ${res.status}`;
-    if (body) {
-      try {
-        const json = JSON.parse(body);
-        message = json.error || json.message || body;
-      } catch {
-        message = body;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+      signal: options?.signal ?? controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      let message = `Request failed: ${res.status}`;
+      if (body) {
+        try {
+          const json = JSON.parse(body);
+          message = json.error || json.message || body;
+        } catch {
+          message = body;
+        }
       }
+      throw new Error(message);
     }
-    throw new Error(message);
+    if (res.status === 204) return undefined as T;
+    return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Request timed out');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  if (res.status === 204) return undefined as T;
-  return res.json();
 }
 
 // Teams

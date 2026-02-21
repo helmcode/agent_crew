@@ -2,6 +2,17 @@ import type { TaskLog } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+function isValidTaskLog(data: unknown): data is TaskLog {
+  if (!data || typeof data !== 'object') return false;
+  const obj = data as Record<string, unknown>;
+  return (
+    typeof obj.id === 'string' &&
+    typeof obj.team_id === 'string' &&
+    typeof obj.message_type === 'string' &&
+    typeof obj.created_at === 'string'
+  );
+}
+
 function getWsUrl(): string {
   const url = new URL(API_URL);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -56,8 +67,9 @@ function createConnection(url: string, options: WebSocketOptions): () => void {
 
     ws.onmessage = (event) => {
       try {
-        const log = JSON.parse(event.data) as TaskLog;
-        options.onMessage(log);
+        const data = JSON.parse(event.data);
+        if (!isValidTaskLog(data)) return;
+        options.onMessage(data);
       } catch {
         // ignore malformed messages
       }

@@ -5,6 +5,7 @@ import { teamsApi, messagesApi, activityApi, chatApi } from '../services/api';
 import { connectTeamActivity, type ConnectionState } from '../services/websocket';
 import { StatusBadge } from '../components/StatusBadge';
 import { MarkdownRenderer } from '../components/Markdown';
+import { ActivityEventCard, LiveActivityFeed } from '../components/ActivityPanel';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
 
@@ -163,6 +164,7 @@ export function TeamMonitorPage() {
   const [chatMessage, setChatMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [waitingForReply, setWaitingForReply] = useState(false);
+  const [liveActivityEvents, setLiveActivityEvents] = useState<TaskLog[]>([]);
   const [chatInputError, setChatInputError] = useState(false);
   const [filterAgent, setFilterAgent] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
@@ -210,12 +212,18 @@ export function TeamMonitorPage() {
   useEffect(() => {
     const disconnect = connectTeamActivity(teamId, {
       onMessage: (log) => {
-        // Clear the thinking indicator when an agent reply arrives
+        // Clear the thinking indicator and live activity feed when an agent reply arrives
         if (
           (log.message_type === 'agent_response' || log.message_type === 'task_result' || log.message_type === 'error') &&
           log.from_agent !== 'user'
         ) {
           setWaitingForReply(false);
+          setLiveActivityEvents([]);
+        }
+
+        // Route activity_event to live feed in chat panel
+        if (log.message_type === 'activity_event') {
+          setLiveActivityEvents((prev) => [...prev, log].slice(-50));
         }
 
         // Route to activity panel (all message types)
@@ -467,6 +475,7 @@ export function TeamMonitorPage() {
                 );
               })
             )}
+            <LiveActivityFeed events={liveActivityEvents} />
             {waitingForReply && (
               <div className="mb-3">
                 <div className="mb-0.5 flex items-center gap-1 text-xs text-slate-500">
@@ -554,7 +563,10 @@ export function TeamMonitorPage() {
             {filteredActivity.length === 0 ? (
               <p className="text-center text-sm text-slate-500">No activity yet</p>
             ) : (
-              filteredActivity.map((msg) => (
+              filteredActivity.map((msg) =>
+                msg.message_type === 'activity_event' ? (
+                  <ActivityEventCard key={msg.id} log={msg} />
+                ) : (
                   <div
                     key={msg.id}
                     className="mb-2 rounded bg-slate-900/50 px-3 py-2"
@@ -576,7 +588,8 @@ export function TeamMonitorPage() {
                       {formatPayload(msg.payload)}
                     </pre>
                   </div>
-                ))
+                )
+              )
             )}
             <div ref={activityEndRef} />
           </div>

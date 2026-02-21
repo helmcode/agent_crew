@@ -105,6 +105,17 @@ export interface UpdateAgentRequest {
   sub_agent_model?: string;
 }
 
+export type ActivityEventType = 'tool_use' | 'assistant' | 'tool_result' | 'error';
+
+export interface ActivityEvent {
+  event_type: ActivityEventType;
+  agent_name: string;
+  tool_name?: string;
+  action?: string;
+  payload?: unknown;
+  timestamp: string;
+}
+
 export interface ChatRequest {
   message: string;
 }

@@ -165,10 +165,20 @@ describe('activityApi', () => {
 describe('request timeout', () => {
   it('throws "Request timed out" when fetch exceeds timeout', async () => {
     vi.useFakeTimers();
-    global.fetch = vi.fn(() => new Promise<Response>(() => {}));
+    global.fetch = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'));
+        });
+      });
+    });
 
     const promise = teamsApi.list();
-    vi.advanceTimersByTime(30_000);
+    // Attach no-op handler so the rejection is marked as "handled" during timer
+    // advancement, preventing the unhandled rejection warning from vitest.
+    promise.catch(() => {});
+
+    await vi.advanceTimersByTimeAsync(30_000);
 
     await expect(promise).rejects.toThrow('Request timed out');
     vi.useRealTimers();

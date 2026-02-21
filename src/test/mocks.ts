@@ -90,6 +90,24 @@ export const mockSetting: Setting = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
+export const mockActivityEventLog: TaskLog = {
+  id: 'log-activity-1',
+  team_id: 'team-uuid-1',
+  message_id: 'msg-activity-1',
+  from_agent: 'backend-dev',
+  to_agent: 'leader',
+  message_type: 'activity_event',
+  payload: {
+    event_type: 'tool_use',
+    agent_name: 'backend-dev',
+    tool_name: 'Bash',
+    action: 'go test ./...',
+    payload: { exit_code: 0 },
+    timestamp: '2026-01-01T00:00:05Z',
+  },
+  created_at: '2026-01-01T00:00:05Z',
+};
+
 export function createFetchMock(responses: Record<string, { status?: number; body?: unknown }>) {
   return vi.fn(async (input: string | URL | Request, _init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;

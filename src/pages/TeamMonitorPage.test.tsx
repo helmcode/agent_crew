@@ -3,7 +3,7 @@ import { render, screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TeamMonitorPage } from './TeamMonitorPage';
-import { mockRunningTeam, mockTaskLog, mockWorkerAgent } from '../test/mocks';
+import { mockRunningTeam, mockTaskLog, mockWorkerAgent, mockActivityEventLog } from '../test/mocks';
 
 let wsOnMessage: ((log: unknown) => void) | null = null;
 let wsOnStateChange: ((state: string) => void) | null = null;
@@ -776,6 +776,65 @@ describe('TeamMonitorPage', () => {
 
     // Leader agent should not have skill status indicator
     expect(screen.queryByTestId('skill-status-test-agent')).not.toBeInTheDocument();
+  });
+
+  // --- Live activity feed tests ---
+
+  it('shows live activity feed in chat panel when activity_event arrives', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    act(() => {
+      wsOnMessage?.(mockActivityEventLog);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('live-activity-feed')).toBeInTheDocument();
+      expect(screen.getByTestId('live-activity-item')).toBeInTheDocument();
+    });
+  });
+
+  it('clears live activity feed when agent_response arrives', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    act(() => {
+      wsOnMessage?.(mockActivityEventLog);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('live-activity-feed')).toBeInTheDocument();
+    });
+
+    act(() => {
+      wsOnMessage?.({
+        ...mockTaskLog,
+        id: 'reply-1',
+        from_agent: 'lead',
+        to_agent: 'user',
+        message_type: 'agent_response',
+        payload: { content: 'Done!' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('live-activity-feed')).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders activity_event with ActivityEventCard in sidebar', async () => {
+    global.fetch = mockFetch([], [mockActivityEventLog]);
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('activity-event-card')).toBeInTheDocument();
+    });
   });
 
   it('renders activity messages with uniform styling (no purple borders)', async () => {

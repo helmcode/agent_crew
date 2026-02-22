@@ -1,8 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { extractActivityEvent, relativeTime, ActivityEventCard, LiveActivityFeed } from './ActivityPanel';
-import type { TaskLog } from '../types';
+import {
+  extractActivityEvent,
+  relativeTime,
+  extractContentItems,
+  classifyActivityEvent,
+  ActivityEventCard,
+  LiveActivityFeed,
+} from './ActivityPanel';
+import type { TaskLog, ActivityEvent } from '../types';
 
 const baseLog: TaskLog = {
   id: 'log-1',
@@ -29,6 +36,15 @@ function makeActivityLog(overrides: Partial<TaskLog> & { eventOverrides?: Record
     ...baseLog,
     ...logOverrides,
     payload: { ...basePayload, ...eventOverrides },
+  };
+}
+
+function makeEvent(overrides: Partial<ActivityEvent> = {}): ActivityEvent {
+  return {
+    event_type: 'assistant',
+    agent_name: 'test-agent',
+    timestamp: '2026-01-15T10:00:00Z',
+    ...overrides,
   };
 }
 
@@ -130,21 +146,238 @@ describe('relativeTime', () => {
   });
 });
 
+describe('extractContentItems', () => {
+  it('extracts from message.content[] pattern', () => {
+    const payload = {
+      message: {
+        content: [
+          { type: 'text', text: 'Hello' },
+          { type: 'tool_use', name: 'Bash', input: { command: 'ls' } },
+        ],
+      },
+    };
+    const items = extractContentItems(payload);
+    expect(items).toHaveLength(2);
+    expect(items[0].type).toBe('text');
+    expect(items[1].name).toBe('Bash');
+  });
+
+  it('extracts from direct content[] pattern', () => {
+    const payload = {
+      content: [{ type: 'thinking', text: 'analyzing...' }],
+    };
+    const items = extractContentItems(payload);
+    expect(items).toHaveLength(1);
+    expect(items[0].type).toBe('thinking');
+  });
+
+  it('returns empty array for null payload', () => {
+    expect(extractContentItems(null)).toEqual([]);
+  });
+
+  it('returns empty array for non-object payload', () => {
+    expect(extractContentItems('string')).toEqual([]);
+  });
+
+  it('returns empty array for payload without content', () => {
+    expect(extractContentItems({ foo: 'bar' })).toEqual([]);
+  });
+});
+
+describe('classifyActivityEvent', () => {
+  it('classifies error events as error', () => {
+    expect(classifyActivityEvent(makeEvent({ event_type: 'error' }))).toBe('error');
+  });
+
+  it('classifies tool_result events as tool_result', () => {
+    expect(classifyActivityEvent(makeEvent({ event_type: 'tool_result' }))).toBe('tool_result');
+  });
+
+  it('classifies tool_use with Task as delegation', () => {
+    expect(classifyActivityEvent(makeEvent({ event_type: 'tool_use', tool_name: 'Task' }))).toBe('delegation');
+  });
+
+  it('classifies tool_use with other tool as tool', () => {
+    expect(classifyActivityEvent(makeEvent({ event_type: 'tool_use', tool_name: 'Bash' }))).toBe('tool');
+  });
+
+  it('classifies tool_use without tool_name as tool', () => {
+    expect(classifyActivityEvent(makeEvent({ event_type: 'tool_use' }))).toBe('tool');
+  });
+
+  it('classifies assistant with Task content item as delegation', () => {
+    const event = makeEvent({
+      payload: {
+        message: {
+          content: [
+            { type: 'tool_use', name: 'Task', input: { description: 'do stuff', subagent_type: 'backend' } },
+          ],
+        },
+      },
+    });
+    expect(classifyActivityEvent(event)).toBe('delegation');
+  });
+
+  it('classifies assistant with non-Task tool_use as tool', () => {
+    const event = makeEvent({
+      payload: {
+        message: {
+          content: [{ type: 'tool_use', name: 'Edit', input: { file_path: '/test.ts' } }],
+        },
+      },
+    });
+    expect(classifyActivityEvent(event)).toBe('tool');
+  });
+
+  it('classifies assistant with thinking content as thinking', () => {
+    const event = makeEvent({
+      payload: {
+        message: {
+          content: [{ type: 'thinking', text: 'analyzing the problem...' }],
+        },
+      },
+    });
+    expect(classifyActivityEvent(event)).toBe('thinking');
+  });
+
+  it('classifies assistant with text content as text', () => {
+    const event = makeEvent({
+      payload: {
+        message: {
+          content: [{ type: 'text', text: 'Here is my response' }],
+        },
+      },
+    });
+    expect(classifyActivityEvent(event)).toBe('text');
+  });
+
+  it('classifies assistant without content items as text', () => {
+    expect(classifyActivityEvent(makeEvent())).toBe('text');
+  });
+
+  it('prioritizes Task tool_use over thinking in mixed content', () => {
+    const event = makeEvent({
+      payload: {
+        message: {
+          content: [
+            { type: 'thinking', text: 'let me think...' },
+            { type: 'tool_use', name: 'Task', input: { description: 'deploy' } },
+          ],
+        },
+      },
+    });
+    expect(classifyActivityEvent(event)).toBe('delegation');
+  });
+
+  it('prioritizes tool_use over thinking in mixed content', () => {
+    const event = makeEvent({
+      payload: {
+        message: {
+          content: [
+            { type: 'thinking', text: 'let me think...' },
+            { type: 'tool_use', name: 'Bash', input: { command: 'ls' } },
+          ],
+        },
+      },
+    });
+    expect(classifyActivityEvent(event)).toBe('tool');
+  });
+});
+
 describe('ActivityEventCard', () => {
-  it('renders tool_use event with tool icon and summary', () => {
+  it('renders tool event with tool icon and summary', () => {
     render(<ActivityEventCard log={baseLog} />);
-    expect(screen.getByTestId('icon-tool-use')).toBeInTheDocument();
-    expect(screen.getByText('tool_use')).toBeInTheDocument();
+    expect(screen.getByTestId('icon-tool')).toBeInTheDocument();
+    expect(screen.getByText('tool')).toBeInTheDocument();
     expect(screen.getByText('backend-dev')).toBeInTheDocument();
     expect(screen.getByText('Bash: npm test')).toBeInTheDocument();
   });
 
-  it('renders assistant event with thinking icon', () => {
+  it('renders delegation event for Task tool_use', () => {
+    const log = makeActivityLog({
+      eventOverrides: { tool_name: 'Task', action: 'Refactor backend' },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByTestId('icon-delegation')).toBeInTheDocument();
+    expect(screen.getByText('delegation')).toBeInTheDocument();
+    expect(screen.getByText(/Delegated.*Refactor backend/)).toBeInTheDocument();
+  });
+
+  it('renders delegation from assistant with Task content item', () => {
+    const log = makeActivityLog({
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'Task',
+                input: { description: 'Fix auth', subagent_type: 'backend' },
+              },
+            ],
+          },
+        },
+      },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByTestId('icon-delegation')).toBeInTheDocument();
+    expect(screen.getByText('delegation')).toBeInTheDocument();
+    expect(screen.getByText(/Delegated.*backend.*Fix auth/)).toBeInTheDocument();
+  });
+
+  it('renders tool from assistant with non-Task tool_use content', () => {
+    const log = makeActivityLog({
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [
+              { type: 'tool_use', name: 'Edit', input: { file_path: '/src/app.ts' } },
+            ],
+          },
+        },
+      },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByTestId('icon-tool')).toBeInTheDocument();
+    expect(screen.getByText('tool')).toBeInTheDocument();
+    expect(screen.getByText('Edit: /src/app.ts')).toBeInTheDocument();
+  });
+
+  it('renders thinking event with muted styling', () => {
+    const log = makeActivityLog({
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [{ type: 'thinking', text: 'Let me analyze this problem carefully' }],
+          },
+        },
+      },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByTestId('icon-thinking')).toBeInTheDocument();
+    expect(screen.getByText('thinking')).toBeInTheDocument();
+    expect(screen.getByText('Let me analyze this problem carefully')).toBeInTheDocument();
+    // Verify muted styling (opacity)
+    const card = screen.getByTestId('activity-event-card');
+    expect(card.className).toContain('opacity-60');
+  });
+
+  it('renders text event for assistant without content items', () => {
     const log = makeActivityLog({
       eventOverrides: { event_type: 'assistant', action: 'Analyzing the code', tool_name: undefined },
     });
     render(<ActivityEventCard log={log} />);
-    expect(screen.getByTestId('icon-assistant')).toBeInTheDocument();
+    expect(screen.getByTestId('icon-text')).toBeInTheDocument();
+    expect(screen.getByText('message')).toBeInTheDocument();
     expect(screen.getByText('Analyzing the code')).toBeInTheDocument();
   });
 
@@ -189,14 +422,83 @@ describe('ActivityEventCard', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('truncates long assistant action text', () => {
-    const longAction = 'A'.repeat(200);
+  it('filters signature fields from payload display', async () => {
     const log = makeActivityLog({
-      eventOverrides: { event_type: 'assistant', action: longAction, tool_name: undefined },
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [
+              { type: 'thinking', text: 'analyzing...', signature: 'abc123secret' },
+            ],
+          },
+        },
+      },
+    });
+    render(<ActivityEventCard log={log} />);
+    await userEvent.click(screen.getByText('Show details'));
+    const payload = screen.getByTestId('event-payload');
+    expect(payload.textContent).not.toContain('abc123secret');
+    expect(payload.textContent).not.toContain('signature');
+  });
+
+  it('shows tool context for Bash command in content items', () => {
+    const log = makeActivityLog({
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [
+              { type: 'tool_use', name: 'Bash', input: { command: 'npm run build' } },
+            ],
+          },
+        },
+      },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Bash: npm run build')).toBeInTheDocument();
+  });
+
+  it('shows tool context for Grep pattern in content items', () => {
+    const log = makeActivityLog({
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [
+              { type: 'tool_use', name: 'Grep', input: { pattern: 'TODO' } },
+            ],
+          },
+        },
+      },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Grep: TODO')).toBeInTheDocument();
+  });
+
+  it('truncates long thinking text at 100 chars', () => {
+    const longText = 'A'.repeat(200);
+    const log = makeActivityLog({
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [{ type: 'thinking', text: longText }],
+          },
+        },
+      },
     });
     render(<ActivityEventCard log={log} />);
     const summary = screen.getByText(/^A+\.\.\.$/);
-    expect(summary.textContent!.length).toBeLessThan(200);
+    expect(summary.textContent!.length).toBe(103); // 100 + '...'
   });
 });
 
@@ -233,26 +535,44 @@ describe('LiveActivityFeed', () => {
     render(<LiveActivityFeed events={events} />);
     expect(screen.getAllByTestId('live-activity-item')).toHaveLength(1);
   });
+
+  it('applies muted styling for thinking events', () => {
+    const log = makeActivityLog({
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [{ type: 'thinking', text: 'pondering...' }],
+          },
+        },
+      },
+    });
+    render(<LiveActivityFeed events={[log]} />);
+    const item = screen.getByTestId('live-activity-item');
+    expect(item.className).toContain('opacity-60');
+  });
 });
 
-describe('getEventSummary edge cases (via components)', () => {
-  it('shows "Thinking..." for assistant event without action', () => {
+describe('getCategorySummary edge cases (via components)', () => {
+  it('shows "Assistant message" for text event without action', () => {
     const log = makeActivityLog({
       eventOverrides: { event_type: 'assistant', action: undefined, tool_name: undefined },
     });
     render(<ActivityEventCard log={log} />);
-    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    expect(screen.getByText('Assistant message')).toBeInTheDocument();
   });
 
-  it('shows "Thinking..." for assistant event with empty string action', () => {
+  it('shows "Assistant message" for text event with empty string action', () => {
     const log = makeActivityLog({
       eventOverrides: { event_type: 'assistant', action: '', tool_name: undefined },
     });
     render(<ActivityEventCard log={log} />);
-    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    expect(screen.getByText('Assistant message')).toBeInTheDocument();
   });
 
-  it('shows action text for tool_use without tool_name', () => {
+  it('shows action text for tool event without tool_name', () => {
     const log = makeActivityLog({
       eventOverrides: { event_type: 'tool_use', tool_name: undefined, action: 'running tests' },
     });
@@ -260,7 +580,7 @@ describe('getEventSummary edge cases (via components)', () => {
     expect(screen.getByText('running tests')).toBeInTheDocument();
   });
 
-  it('shows "Tool call" for tool_use without tool_name and action', () => {
+  it('shows "Tool call" for tool event without tool_name and action', () => {
     const log = makeActivityLog({
       eventOverrides: { event_type: 'tool_use', tool_name: undefined, action: undefined },
     });
@@ -290,5 +610,70 @@ describe('getEventSummary edge cases (via components)', () => {
     });
     render(<ActivityEventCard log={log} />);
     expect(screen.getByText('Tool result')).toBeInTheDocument();
+  });
+
+  it('shows "Delegated task" for Task tool_use without action', () => {
+    const log = makeActivityLog({
+      eventOverrides: { event_type: 'tool_use', tool_name: 'Task', action: undefined },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Delegated task')).toBeInTheDocument();
+  });
+
+  it('shows "Thinking..." for thinking event without text', () => {
+    const log = makeActivityLog({
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [{ type: 'thinking' }],
+          },
+        },
+      },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+  });
+
+  it('shows text from content item for text category', () => {
+    const log = makeActivityLog({
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [{ type: 'text', text: 'Here is my analysis' }],
+          },
+        },
+      },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText('Here is my analysis')).toBeInTheDocument();
+  });
+
+  it('shows delegation summary with subagent_type and description', () => {
+    const log = makeActivityLog({
+      eventOverrides: {
+        event_type: 'assistant',
+        tool_name: undefined,
+        action: undefined,
+        payload: {
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'Task',
+                input: { subagent_type: 'Explore', description: 'Search codebase' },
+              },
+            ],
+          },
+        },
+      },
+    });
+    render(<ActivityEventCard log={log} />);
+    expect(screen.getByText(/Delegated.*Explore.*Search codebase/)).toBeInTheDocument();
   });
 });

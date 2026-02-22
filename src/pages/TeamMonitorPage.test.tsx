@@ -111,7 +111,7 @@ describe('TeamMonitorPage', () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('test-agent')).toBeInTheDocument();
-      expect(screen.getByText('worker-agent')).toBeInTheDocument();
+      expect(screen.getAllByText('worker-agent').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -650,7 +650,7 @@ describe('TeamMonitorPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('worker-agent')).toBeInTheDocument();
+      expect(screen.getAllByText('worker-agent').length).toBeGreaterThanOrEqual(1);
     });
 
     // Sub-agent should have file icon, not container dot
@@ -689,7 +689,7 @@ describe('TeamMonitorPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('worker-agent')).toBeInTheDocument();
+      expect(screen.getAllByText('worker-agent').length).toBeGreaterThanOrEqual(1);
     });
 
     // Worker agent mock has skill_statuses with 2 installed skills

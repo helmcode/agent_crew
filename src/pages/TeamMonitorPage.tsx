@@ -7,10 +7,12 @@ import { StatusBadge } from '../components/StatusBadge';
 import { MarkdownRenderer } from '../components/Markdown';
 import { ActivityEventCard, LiveActivityFeed } from '../components/ActivityPanel';
 import { toast } from '../components/Toast';
+import { SkillStatusPanel, hasFailedSkills, getFailureMessage } from '../components/SkillStatusPanel';
 import { friendlyError } from '../utils/errors';
 
 const messageTypeColors: Record<string, string> = {
   user_message: 'text-blue-400',
+  leader_response: 'text-cyan-400',
   agent_response: 'text-cyan-400',
   tool_call: 'text-yellow-400',
   tool_result: 'text-green-400',
@@ -32,7 +34,7 @@ function formatPayload(payload: unknown): string {
   }
 }
 
-const CHAT_TYPES = new Set(['user_message', 'agent_response', 'error', 'task_result']);
+const CHAT_TYPES = new Set(['user_message', 'leader_response', 'agent_response', 'error', 'task_result']);
 
 // innerPayload extracts the actual message payload from a TaskLog.
 // The relay stores the full protocol.Message as TaskLog.payload, so the
@@ -51,7 +53,7 @@ function innerPayload(msg: TaskLog): Record<string, unknown> {
 function isErrorMessage(msg: TaskLog): boolean {
   if (msg.message_type === 'error') return true;
   if (msg.error) return true;
-  if (msg.message_type === 'task_result') {
+  if (msg.message_type === 'leader_response' || msg.message_type === 'task_result') {
     const inner = innerPayload(msg);
     if (inner.error || inner.is_error || inner.status === 'failed') return true;
   }
@@ -77,6 +79,7 @@ function getChatText(msg: TaskLog): string {
       if (typeof inner.content === 'string' && inner.content) return inner.content;
       return formatPayload(msg.payload);
 
+    case 'leader_response':
     case 'task_result': {
       if (typeof inner.result === 'string' && inner.result) return inner.result;
       if (typeof inner.error === 'string' && inner.error) return inner.error;
@@ -214,7 +217,7 @@ export function TeamMonitorPage() {
       onMessage: (log) => {
         // Clear the thinking indicator and live activity feed when an agent reply arrives
         if (
-          (log.message_type === 'agent_response' || log.message_type === 'task_result' || log.message_type === 'error') &&
+          (log.message_type === 'leader_response' || log.message_type === 'agent_response' || log.message_type === 'task_result' || log.message_type === 'error') &&
           log.from_agent !== 'user'
         ) {
           setWaitingForReply(false);
@@ -224,6 +227,13 @@ export function TeamMonitorPage() {
         // Route activity_event to live feed in chat panel
         if (log.message_type === 'activity_event') {
           setLiveActivityEvents((prev) => [...prev, log].slice(-50));
+        }
+
+        // Toast notification for failed skill installations
+        if (log.message_type === 'skill_status' && hasFailedSkills(log)) {
+          toast('error', getFailureMessage(log));
+          // Refresh team data to pick up updated skill_statuses on agents
+          fetchTeam();
         }
 
         // Route to activity panel (all message types)
@@ -419,6 +429,11 @@ export function TeamMonitorPage() {
           )}
         </div>
       </div>
+
+      {/* Skill Status Panel — collapsible, only shown when agents have skills */}
+      {team.agents && team.agents.length > 0 && (
+        <SkillStatusPanel agents={team.agents} />
+      )}
 
       {/* Main Content: Chat (left, large) + Activity (right, narrow) */}
       <div className="flex min-h-0 flex-1 gap-4">

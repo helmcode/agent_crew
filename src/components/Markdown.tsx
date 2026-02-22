@@ -4,9 +4,15 @@ interface MarkdownRendererProps {
   children: string;
 }
 
+const ALLOWED_ELEMENTS = [
+  'p', 'strong', 'em', 'ul', 'ol', 'li', 'pre', 'code',
+  'h1', 'h2', 'h3', 'a', 'blockquote', 'hr', 'br',
+];
+
 export function MarkdownRenderer({ children }: MarkdownRendererProps) {
   return (
     <ReactMarkdown
+      allowedElements={ALLOWED_ELEMENTS}
       components={{
         p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
         strong: ({ children }) => <strong className="font-bold">{children}</strong>,

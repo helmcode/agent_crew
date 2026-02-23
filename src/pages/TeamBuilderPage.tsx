@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { CreateTeamRequest } from '../types';
+import type { CreateTeamRequest, SkillConfig } from '../types';
 import { teamsApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
@@ -11,13 +11,12 @@ interface AgentDraft {
   name: string;
   claude_md: string;
   sub_agent_description: string;
-  sub_agent_skills: string[];
+  sub_agent_skills: SkillConfig[];
   sub_agent_model: string;
 }
 
 const MAX_NAME_LENGTH = 255;
 const MAX_SKILLS_PER_AGENT = 20;
-const SKILL_NAME_PATTERN = /^[@a-zA-Z0-9][\w./-]*$/;
 
 function isValidName(name: string): boolean {
   const trimmed = name.trim();
@@ -40,7 +39,10 @@ function generateSubAgentPreview(agent: AgentDraft): string {
   lines.push('permissionMode: bypassPermissions');
   if (agent.sub_agent_skills.length > 0) {
     lines.push('skills:');
-    agent.sub_agent_skills.forEach((s) => lines.push(`  - ${s}`));
+    agent.sub_agent_skills.forEach((s) => {
+      lines.push(`  - skill_name: ${s.skill_name}`);
+      lines.push(`    repo_url: ${s.repo_url}`);
+    });
   }
   lines.push('---');
   return lines.join('\n');
@@ -73,7 +75,8 @@ export function TeamBuilderPage() {
   ]);
 
   // Transient skill input text per agent (keyed by agent.id)
-  const [skillInputs, setSkillInputs] = useState<Record<string, string>>({});
+  const [skillRepoInputs, setSkillRepoInputs] = useState<Record<string, string>>({});
+  const [skillNameInputs, setSkillNameInputs] = useState<Record<string, string>>({});
 
   function addAgent() {
     setAgents([...agents, {
@@ -96,40 +99,64 @@ export function TeamBuilderPage() {
 
   function addSkill(agentIndex: number) {
     const agentId = agents[agentIndex].id;
-    const raw = skillInputs[agentId] ?? '';
-    const skill = raw.replace(/,\s*$/, '').trim();
-    if (!skill) return;
-    if (!SKILL_NAME_PATTERN.test(skill)) {
-      toast('error', `Invalid skill name: "${skill}". Use alphanumeric, @scope/name, or dotted names.`);
+    const repoUrl = (skillRepoInputs[agentId] ?? '').trim();
+    const skillName = (skillNameInputs[agentId] ?? '').trim();
+
+    if (!repoUrl) {
+      toast('error', 'Repository URL is required');
       return;
     }
+    if (!skillName) {
+      toast('error', 'Skill name is required');
+      return;
+    }
+
+    // Validate URL format
+    try {
+      const url = new URL(repoUrl);
+      if (url.protocol !== 'https:') {
+        toast('error', 'Repository URL must use HTTPS');
+        return;
+      }
+    } catch {
+      toast('error', 'Invalid repository URL');
+      return;
+    }
+
+    // Validate skill name
+    if (!/^[a-zA-Z0-9@/_.-]+$/.test(skillName)) {
+      toast('error', 'Invalid skill name. Use alphanumeric characters, hyphens, underscores, dots.');
+      return;
+    }
+
     if (agents[agentIndex].sub_agent_skills.length >= MAX_SKILLS_PER_AGENT) {
       toast('error', `Maximum ${MAX_SKILLS_PER_AGENT} skills per agent.`);
       return;
     }
-    setAgents(agents.map((a, i) => {
-      if (i !== agentIndex || a.sub_agent_skills.includes(skill)) return a;
-      return { ...a, sub_agent_skills: [...a.sub_agent_skills, skill] };
-    }));
-    setSkillInputs({ ...skillInputs, [agentId]: '' });
-  }
 
-  function removeSkill(agentIndex: number, skill: string) {
-    setAgents(agents.map((a, i) =>
-      i === agentIndex ? { ...a, sub_agent_skills: a.sub_agent_skills.filter((s) => s !== skill) } : a,
-    ));
-  }
-
-  function handleSkillKeyDown(agentIndex: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    const agentId = agents[agentIndex].id;
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      addSkill(agentIndex);
-    } else if (e.key === 'Backspace' && !(skillInputs[agentId] ?? '') && agents[agentIndex].sub_agent_skills.length > 0) {
-      setAgents(agents.map((a, i) =>
-        i === agentIndex ? { ...a, sub_agent_skills: a.sub_agent_skills.slice(0, -1) } : a,
-      ));
+    // Check for duplicates
+    const isDuplicate = agents[agentIndex].sub_agent_skills.some(
+      (s) => s.repo_url === repoUrl && s.skill_name === skillName,
+    );
+    if (isDuplicate) {
+      toast('error', 'This skill is already added');
+      return;
     }
+
+    const updated = [...agents];
+    updated[agentIndex] = {
+      ...updated[agentIndex],
+      sub_agent_skills: [...updated[agentIndex].sub_agent_skills, { repo_url: repoUrl, skill_name: skillName }],
+    };
+    setAgents(updated);
+    setSkillRepoInputs({ ...skillRepoInputs, [agentId]: '' });
+    setSkillNameInputs({ ...skillNameInputs, [agentId]: '' });
+  }
+
+  function removeSkill(agentIndex: number, skillIndex: number) {
+    setAgents(agents.map((a, i) =>
+      i === agentIndex ? { ...a, sub_agent_skills: a.sub_agent_skills.filter((_, sIdx) => sIdx !== skillIndex) } : a,
+    ));
   }
 
   function canProceed(): boolean {
@@ -320,29 +347,57 @@ export function TeamBuilderPage() {
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-slate-400">Skills</label>
-                    <div className="flex min-h-[34px] flex-wrap items-center gap-1.5 rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5">
-                      {agent.sub_agent_skills.map((skill) => (
-                        <span key={skill} className="flex items-center gap-1 rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-200">
-                          {skill}
-                          <button
-                            type="button"
-                            onClick={() => removeSkill(i, skill)}
-                            className="leading-none text-slate-400 hover:text-white"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                      <input
-                        value={skillInputs[agent.id] ?? ''}
-                        onChange={(e) => setSkillInputs({ ...skillInputs, [agent.id]: e.target.value })}
-                        onKeyDown={(e) => handleSkillKeyDown(i, e)}
-                        onBlur={() => addSkill(i)}
-                        className="min-w-[120px] flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
-                        placeholder={agent.sub_agent_skills.length === 0 ? 'Add skill and press Enter' : ''}
-                      />
+                    {agent.sub_agent_skills.length > 0 && (
+                      <div className="mb-2 flex flex-wrap gap-1.5">
+                        {agent.sub_agent_skills.map((skill, sIdx) => (
+                          <span key={sIdx} className="inline-flex items-center gap-1 rounded bg-slate-700 px-2 py-1 text-xs text-slate-200">
+                            <span className="font-medium">{skill.skill_name}</span>
+                            <span className="truncate max-w-[200px] text-[10px] text-slate-400" title={skill.repo_url}>
+                              ({skill.repo_url.replace('https://github.com/', '')})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeSkill(i, sIdx)}
+                              className="ml-1 leading-none text-slate-400 hover:text-red-400"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <label className="block text-xs text-slate-400 mb-1">Repository URL</label>
+                        <input
+                          type="text"
+                          className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          placeholder="https://github.com/owner/repo"
+                          value={skillRepoInputs[agent.id] ?? ''}
+                          onChange={(e) => setSkillRepoInputs({ ...skillRepoInputs, [agent.id]: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill(i); } }}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-slate-400 mb-1">Skill Name</label>
+                        <input
+                          type="text"
+                          className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          placeholder="skill-name"
+                          value={skillNameInputs[agent.id] ?? ''}
+                          onChange={(e) => setSkillNameInputs({ ...skillNameInputs, [agent.id]: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill(i); } }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500"
+                        onClick={() => addSkill(i)}
+                      >
+                        Add
+                      </button>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">Press Enter to add each skill package (e.g. vercel-labs/agent-skills).</p>
+                    <p className="mt-1 text-xs text-slate-500">Press Enter or click Add to add each skill. Example: URL: https://github.com/jezweb/claude-skills, Name: fastapi</p>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-slate-400">Model</label>

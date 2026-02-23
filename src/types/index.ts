@@ -6,6 +6,11 @@ export type ContainerStatus = 'stopped' | 'running' | 'error';
 
 export type SkillInstallState = 'pending' | 'installed' | 'failed';
 
+export interface SkillConfig {
+  repo_url: string;
+  skill_name: string;
+}
+
 export interface SkillStatus {
   name: string;
   status: SkillInstallState;
@@ -39,7 +44,7 @@ export interface Agent {
   container_id: string;
   container_status: ContainerStatus;
   sub_agent_description?: string;
-  sub_agent_skills?: string[];
+  sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;
   created_at: string;
   updated_at: string;
@@ -83,7 +88,7 @@ export interface CreateAgentInput {
   role?: 'leader' | 'worker';
   claude_md?: string;
   sub_agent_description?: string;
-  sub_agent_skills?: string[];
+  sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;
 }
 
@@ -92,7 +97,7 @@ export interface CreateAgentRequest {
   role?: 'leader' | 'worker';
   claude_md?: string;
   sub_agent_description?: string;
-  sub_agent_skills?: string[];
+  sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;
 }
 
@@ -101,7 +106,7 @@ export interface UpdateAgentRequest {
   role?: 'leader' | 'worker';
   claude_md?: string;
   sub_agent_description?: string;
-  sub_agent_skills?: string[];
+  sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;
 }
 

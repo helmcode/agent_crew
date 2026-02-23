@@ -191,7 +191,7 @@ describe('TeamBuilderPage', () => {
     await userEvent.click(screen.getByText('Next'));
 
     expect(screen.queryByText('Skills')).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('Add skill and press Enter')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('https://github.com/owner/repo')).not.toBeInTheDocument();
   });
 
   it('does not include skills in create payload', async () => {
@@ -296,7 +296,8 @@ describe('TeamBuilderPage', () => {
 
     // Sub-agent should show structured fields
     expect(screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Add skill and press Enter')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('https://github.com/owner/repo')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('skill-name')).toBeInTheDocument();
     expect(screen.getByText('Inherit (default)')).toBeInTheDocument();
 
     // Sub-agent should NOT have CLAUDE.md textarea (only 1 from the leader)
@@ -365,10 +366,21 @@ describe('TeamBuilderPage', () => {
       screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
       'Handles backend API tasks',
     );
-    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
-    await userEvent.type(skillInput, 'Read{Enter}');
-    await userEvent.type(skillInput, 'Bash{Enter}');
-    await userEvent.type(skillInput, 'Edit{Enter}');
+    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    const nameInput = screen.getByPlaceholderText('skill-name');
+    const addBtn = screen.getByText('Add');
+
+    await userEvent.type(repoInput, 'https://github.com/anthropic/tools');
+    await userEvent.type(nameInput, 'read');
+    await userEvent.click(addBtn);
+
+    await userEvent.type(repoInput, 'https://github.com/anthropic/tools');
+    await userEvent.type(nameInput, 'bash');
+    await userEvent.click(addBtn);
+
+    await userEvent.type(repoInput, 'https://github.com/anthropic/tools');
+    await userEvent.type(nameInput, 'edit');
+    await userEvent.click(addBtn);
 
     // Change model to sonnet
     await userEvent.selectOptions(screen.getByDisplayValue('Inherit (default)'), 'sonnet');
@@ -392,7 +404,11 @@ describe('TeamBuilderPage', () => {
       // Worker should have sub-agent fields, not claude_md
       expect(body.agents[1].role).toBe('worker');
       expect(body.agents[1].sub_agent_description).toBe('Handles backend API tasks');
-      expect(body.agents[1].sub_agent_skills).toEqual(['Read', 'Bash', 'Edit']);
+      expect(body.agents[1].sub_agent_skills).toEqual([
+        { repo_url: 'https://github.com/anthropic/tools', skill_name: 'read' },
+        { repo_url: 'https://github.com/anthropic/tools', skill_name: 'bash' },
+        { repo_url: 'https://github.com/anthropic/tools', skill_name: 'edit' },
+      ]);
       expect(body.agents[1].sub_agent_model).toBe('sonnet');
       expect(body.agents[1]).not.toHaveProperty('claude_md');
     });
@@ -470,9 +486,15 @@ describe('TeamBuilderPage', () => {
       screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
       'Builds frontend components',
     );
-    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
-    await userEvent.type(skillInput, 'Read{Enter}');
-    await userEvent.type(skillInput, 'Write{Enter}');
+    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    const nameInput = screen.getByPlaceholderText('skill-name');
+    const addBtn = screen.getByText('Add');
+    await userEvent.type(repoInput, 'https://github.com/anthropic/tools');
+    await userEvent.type(nameInput, 'read');
+    await userEvent.click(addBtn);
+    await userEvent.type(repoInput, 'https://github.com/anthropic/tools');
+    await userEvent.type(nameInput, 'write');
+    await userEvent.click(addBtn);
     await userEvent.selectOptions(screen.getByDisplayValue('Inherit (default)'), 'opus');
 
     await userEvent.click(screen.getByText('Next'));
@@ -487,8 +509,9 @@ describe('TeamBuilderPage', () => {
     expect(preview.textContent).toContain('isolation: worktree');
     expect(preview.textContent).toContain('permissionMode: bypassPermissions');
     expect(preview.textContent).toContain('skills:');
-    expect(preview.textContent).toContain('  - Read');
-    expect(preview.textContent).toContain('  - Write');
+    expect(preview.textContent).toContain('  - skill_name: read');
+    expect(preview.textContent).toContain('    repo_url: https://github.com/anthropic/tools');
+    expect(preview.textContent).toContain('  - skill_name: write');
   });
 
   it('shows JSON preview in step 3 with claude_md field', async () => {
@@ -597,32 +620,40 @@ describe('TeamBuilderPage', () => {
     expect((textarea as HTMLTextAreaElement).value).toBe('# My custom agent config');
   });
 
-  it('rejects invalid skill names with toast error', async () => {
+  it('rejects invalid repository URL with toast error', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
 
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
-    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
-    await userEvent.type(skillInput, '!!!invalid{Enter}');
+    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    const nameInput = screen.getByPlaceholderText('skill-name');
 
-    // Invalid skill should not be added — input stays, toast fires
+    await userEvent.type(repoInput, 'not-a-url');
+    await userEvent.type(nameInput, 'test-skill');
+    await userEvent.click(screen.getByText('Add'));
+
+    // Invalid URL should not be added
     await waitFor(() => {
-      expect(screen.queryByText('!!!invalid')).not.toBeInTheDocument();
+      expect(screen.queryByText('test-skill')).not.toBeInTheDocument();
     });
   });
 
-  it('accepts valid scoped package skill names', async () => {
+  it('accepts valid repo URL and skill name', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
 
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
-    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
-    await userEvent.type(skillInput, '@anthropic/tool-read{Enter}');
+    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    const nameInput = screen.getByPlaceholderText('skill-name');
+
+    await userEvent.type(repoInput, 'https://github.com/vercel-labs/agent-skills');
+    await userEvent.type(nameInput, 'react-best-practices');
+    await userEvent.click(screen.getByText('Add'));
 
     await waitFor(() => {
-      expect(screen.getByText('@anthropic/tool-read')).toBeInTheDocument();
+      expect(screen.getByText('react-best-practices')).toBeInTheDocument();
     });
   });
 
@@ -632,15 +663,21 @@ describe('TeamBuilderPage', () => {
     await userEvent.click(screen.getByText('Next'));
 
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
-    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    const nameInput = screen.getByPlaceholderText('skill-name');
+    const addBtn = screen.getByText('Add');
 
     // Add 20 skills (the max)
     for (let i = 0; i < 20; i++) {
-      await userEvent.type(skillInput, `skill-${i}{Enter}`);
+      await userEvent.type(repoInput, 'https://github.com/owner/repo');
+      await userEvent.type(nameInput, `skill-${i}`);
+      await userEvent.click(addBtn);
     }
 
     // 21st should be rejected
-    await userEvent.type(skillInput, 'skill-overflow{Enter}');
+    await userEvent.type(repoInput, 'https://github.com/owner/repo');
+    await userEvent.type(nameInput, 'skill-overflow');
+    await userEvent.click(addBtn);
 
     await waitFor(() => {
       expect(screen.queryByText('skill-overflow')).not.toBeInTheDocument();
@@ -674,71 +711,96 @@ describe('TeamBuilderPage — skill interactions', () => {
 
   it('removes a skill by clicking the × button', async () => {
     await goToStep2WithSubAgent();
-    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    const nameInput = screen.getByPlaceholderText('skill-name');
 
-    await userEvent.type(skillInput, 'my-skill{Enter}');
-    expect(screen.getByText('my-skill')).toBeInTheDocument();
+    await userEvent.type(repoInput, 'https://github.com/jezweb/claude-skills');
+    await userEvent.type(nameInput, 'fastapi');
+    await userEvent.click(screen.getByText('Add'));
+    expect(screen.getByText('fastapi')).toBeInTheDocument();
 
     // Click the × button inside the skill chip
-    const skillSpan = screen.getByText('my-skill').closest('span');
-    const removeBtn = skillSpan!.querySelector('button')!;
+    const innerSpan = screen.getByText('fastapi');
+    const chipSpan = innerSpan.parentElement!;
+    const removeBtn = chipSpan.querySelector('button')!;
     await userEvent.click(removeBtn);
 
-    expect(screen.queryByText('my-skill')).not.toBeInTheDocument();
+    expect(screen.queryByText('fastapi')).not.toBeInTheDocument();
   });
 
-  it('adds a skill via comma key', async () => {
+  it('shows duplicate error for identical skills', async () => {
     await goToStep2WithSubAgent();
-    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    const nameInput = screen.getByPlaceholderText('skill-name');
+    const addBtn = screen.getByText('Add');
 
-    await userEvent.type(skillInput, 'comma-skill,');
+    await userEvent.type(repoInput, 'https://github.com/owner/repo');
+    await userEvent.type(nameInput, 'dupe-skill');
+    await userEvent.click(addBtn);
 
-    await waitFor(() => {
-      expect(screen.getByText('comma-skill')).toBeInTheDocument();
-    });
-  });
-
-  it('removes last skill on Backspace when input is empty', async () => {
-    await goToStep2WithSubAgent();
-    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
-
-    await userEvent.type(skillInput, 'skill-one{Enter}');
-    await userEvent.type(skillInput, 'skill-two{Enter}');
-
-    expect(screen.getByText('skill-one')).toBeInTheDocument();
-    expect(screen.getByText('skill-two')).toBeInTheDocument();
-
-    // Backspace on empty input removes the last skill
-    await userEvent.type(skillInput, '{Backspace}');
-
-    await waitFor(() => {
-      expect(screen.queryByText('skill-two')).not.toBeInTheDocument();
-    });
-    expect(screen.getByText('skill-one')).toBeInTheDocument();
-  });
-
-  it('silently ignores duplicate skills', async () => {
-    await goToStep2WithSubAgent();
-    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
-
-    await userEvent.type(skillInput, 'dupe-skill{Enter}');
-    await userEvent.type(skillInput, 'dupe-skill{Enter}');
+    await userEvent.type(repoInput, 'https://github.com/owner/repo');
+    await userEvent.type(nameInput, 'dupe-skill');
+    await userEvent.click(addBtn);
 
     // Only one instance should be present
     const matches = screen.getAllByText('dupe-skill');
     expect(matches).toHaveLength(1);
   });
 
-  it('adds pending skill on blur', async () => {
+  it('rejects missing repository URL', async () => {
     await goToStep2WithSubAgent();
-    const skillInput = screen.getByPlaceholderText('Add skill and press Enter');
+    const nameInput = screen.getByPlaceholderText('skill-name');
 
-    await userEvent.type(skillInput, 'blur-skill');
-    // Trigger blur by tabbing away
-    await userEvent.tab();
+    await userEvent.type(nameInput, 'fastapi');
+    await userEvent.click(screen.getByText('Add'));
+
+    // Skill should not be added without repo URL
+    await waitFor(() => {
+      expect(screen.queryByText('fastapi')).not.toBeInTheDocument();
+    });
+  });
+
+  it('rejects non-HTTPS repository URL', async () => {
+    await goToStep2WithSubAgent();
+    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    const nameInput = screen.getByPlaceholderText('skill-name');
+
+    await userEvent.type(repoInput, 'http://github.com/owner/repo');
+    await userEvent.type(nameInput, 'test-skill');
+    await userEvent.click(screen.getByText('Add'));
+
+    // Skill should not be added with HTTP URL
+    await waitFor(() => {
+      expect(screen.queryByText('test-skill')).not.toBeInTheDocument();
+    });
+  });
+
+  it('accepts valid repo URL and skill name via two fields', async () => {
+    await goToStep2WithSubAgent();
+    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    const nameInput = screen.getByPlaceholderText('skill-name');
+
+    await userEvent.type(repoInput, 'https://github.com/vercel-labs/agent-skills');
+    await userEvent.type(nameInput, 'react-best-practices');
+    await userEvent.click(screen.getByText('Add'));
 
     await waitFor(() => {
-      expect(screen.getByText('blur-skill')).toBeInTheDocument();
+      expect(screen.getByText('react-best-practices')).toBeInTheDocument();
+    });
+  });
+
+  it('adds a skill via Enter key on repo input', async () => {
+    await goToStep2WithSubAgent();
+    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
+    const nameInput = screen.getByPlaceholderText('skill-name');
+
+    await userEvent.type(repoInput, 'https://github.com/owner/repo');
+    await userEvent.type(nameInput, 'enter-skill');
+    // Press Enter on repo input
+    await userEvent.type(repoInput, '{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByText('enter-skill')).toBeInTheDocument();
     });
   });
 });

@@ -275,13 +275,17 @@ export function TeamMonitorPage() {
     return disconnect;
   }, [teamId]);
 
-  // Auto-scroll chat panel when new messages arrive.
+  // Auto-scroll chat panel when new content appears (messages, activity events, thinking state).
   useEffect(() => {
     if (chatMessages.length > prevChatCountRef.current) {
       prevChatCountRef.current = chatMessages.length;
-      if (autoScroll) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [chatMessages, autoScroll]);
+    if (autoScroll) {
+      requestAnimationFrame(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+  }, [chatMessages, liveActivityEvents, waitingForReply, autoScroll]);
 
   // Auto-scroll activity panel when new messages arrive.
   useEffect(() => {

@@ -955,6 +955,89 @@ describe('TeamMonitorPage', () => {
 
   // --- Stopped team disables chat ---
 
+  // --- Chat auto-scroll tests ---
+
+  it('auto-scroll triggers on liveActivityEvents change', async () => {
+    const scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    scrollIntoViewMock.mockClear();
+
+    act(() => {
+      wsOnMessage?.(mockActivityEventLog);
+    });
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+    });
+  });
+
+  it('auto-scroll triggers on waitingForReply change', async () => {
+    const scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Send a message...')).not.toBeDisabled();
+    });
+
+    scrollIntoViewMock.mockClear();
+
+    await userEvent.type(screen.getByPlaceholderText('Send a message...'), 'Trigger scroll');
+    await userEvent.click(screen.getByText('Send'));
+
+    // Sending sets waitingForReply=true, which should trigger auto-scroll
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+    });
+  });
+
+  it('auto-scroll uses requestAnimationFrame', async () => {
+    const scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const originalRAF = globalThis.requestAnimationFrame;
+    const rafMock = vi.fn((cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    globalThis.requestAnimationFrame = rafMock;
+
+    global.fetch = mockFetch();
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    rafMock.mockClear();
+    scrollIntoViewMock.mockClear();
+
+    act(() => {
+      wsOnMessage?.({
+        ...mockTaskLog,
+        id: 'raf-test-1',
+        from_agent: 'lead',
+        to_agent: 'user',
+        message_type: 'agent_response',
+        payload: { content: 'RAF test message' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(rafMock).toHaveBeenCalled();
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+    });
+
+    globalThis.requestAnimationFrame = originalRAF;
+  });
+
   it('disables chat input and send button when team is stopped', async () => {
     const stoppedTeam = { ...mockRunningTeam, status: 'stopped' as const };
     global.fetch = vi.fn(async (input: string | URL | Request) => {

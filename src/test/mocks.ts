@@ -39,11 +39,14 @@ export const mockWorkerAgent: Agent = {
   role: 'worker',
   claude_md: 'You handle backend tasks.',
   sub_agent_description: 'Handles backend API development and database operations',
-  sub_agent_skills: ['@anthropic/tool-read', '@anthropic/tool-bash'],
+  sub_agent_skills: [
+    { repo_url: 'https://github.com/anthropic/tools', skill_name: 'read' },
+    { repo_url: 'https://github.com/anthropic/tools', skill_name: 'bash' },
+  ],
   sub_agent_model: 'sonnet',
   skill_statuses: [
-    { name: '@anthropic/tool-read', status: 'installed' },
-    { name: '@anthropic/tool-bash', status: 'installed' },
+    { name: 'https://github.com/anthropic/tools:read', status: 'installed' },
+    { name: 'https://github.com/anthropic/tools:bash', status: 'installed' },
   ],
 };
 

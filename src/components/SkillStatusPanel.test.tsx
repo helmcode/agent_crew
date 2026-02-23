@@ -454,7 +454,7 @@ describe('SkillStatusPanel with mock data', () => {
     render(<SkillStatusPanel agents={[mockWorkerAgent]} />);
     expect(screen.getByTestId('skill-status-panel')).toBeTruthy();
     expect(screen.getByTestId('agent-skills-worker-agent')).toBeTruthy();
-    expect(screen.getByTestId('skill-item-@anthropic/tool-read')).toBeTruthy();
-    expect(screen.getByTestId('skill-item-@anthropic/tool-bash')).toBeTruthy();
+    expect(screen.getByTestId('skill-item-https://github.com/anthropic/tools:read')).toBeTruthy();
+    expect(screen.getByTestId('skill-item-https://github.com/anthropic/tools:bash')).toBeTruthy();
   });
 });

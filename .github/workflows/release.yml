@@ -42,11 +42,12 @@ jobs:
         with:
           context: .
           push: true
+          provenance: false
           build-args: |
             VITE_API_URL=
           tags: |
-            ghcr.io/helmcode/agentcrew-frontend:${{ steps.version.outputs.version }}
-            ghcr.io/helmcode/agentcrew-frontend:latest
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha

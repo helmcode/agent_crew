@@ -109,4 +109,4 @@ All API calls go through a centralized `request()` function that handles errors,
 
 ## License
 
-See the repository root for license information.
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).

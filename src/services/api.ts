@@ -92,6 +92,11 @@ export const agentsApi = {
     request<void>(`/api/teams/${teamId}/agents/${agentId}`, {
       method: 'DELETE',
     }),
+  installSkill: (teamId: string, agentId: string, data: { repo_url: string; skill_name: string }) =>
+    request<{ output: string }>(`/api/teams/${teamId}/agents/${agentId}/skills/install`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 // Chat & Messages

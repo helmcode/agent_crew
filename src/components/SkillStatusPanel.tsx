@@ -3,6 +3,11 @@ import type { Agent, SkillStatus, TaskLog } from '../types';
 import { agentsApi } from '../services/api';
 import { toast } from './Toast';
 
+/** Strip ANSI escape codes from a string for clean display. */
+function stripAnsi(str: string): string {
+  return str.replace(/\x1B\[[0-9;]*[a-zA-Z]|\x1B\].*?\x07|\x1B\[[\?]?[0-9;]*[a-zA-Z]/g, '');
+}
+
 /**
  * Extract a skill status payload from a skill_status TaskLog,
  * handling both flat and NATS envelope structures.
@@ -136,9 +141,9 @@ function SkillItem({ skill }: { skill: SkillStatus }) {
       {expanded && skill.error && (
         <pre
           data-testid={`skill-error-${skill.name}`}
-          className="mb-1 ml-4 rounded bg-red-500/5 px-2 py-1 text-xs text-red-400"
+          className="mb-1 ml-4 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-red-500/5 px-2 py-1 text-xs text-red-400"
         >
-          {skill.error}
+          {stripAnsi(skill.error)}
         </pre>
       )}
     </div>
@@ -302,16 +307,16 @@ export function SkillStatusPanel({ agents }: SkillStatusPanelProps) {
 }
 
 // ============================================================
-// ToolsButton — icon button for the chat input area
+// SettingsButton — icon button for the chat input area
 // ============================================================
 
-interface ToolsButtonProps {
+interface SettingsButtonProps {
   agents: Agent[];
   onClick: () => void;
   disabled?: boolean;
 }
 
-export function ToolsButton({ agents, onClick, disabled }: ToolsButtonProps) {
+export function SettingsButton({ agents, onClick, disabled }: SettingsButtonProps) {
   const hasFailures = agents.some(
     (a) => a.skill_statuses?.some((s) => s.status === 'failed'),
   );
@@ -332,8 +337,8 @@ export function ToolsButton({ agents, onClick, disabled }: ToolsButtonProps) {
       onClick={onClick}
       disabled={disabled}
       className={`flex flex-shrink-0 items-center justify-center rounded-lg p-2 transition-colors ${iconColor} disabled:opacity-50`}
-      title="Tools & Skills"
-      data-testid="tools-button"
+      title="Settings"
+      data-testid="settings-button"
     >
       <svg
         className="h-5 w-5"
@@ -353,10 +358,10 @@ export function ToolsButton({ agents, onClick, disabled }: ToolsButtonProps) {
 }
 
 // ============================================================
-// ToolsModal — modal with sidebar for skills management
+// SettingsModal — modal with sidebar for skills management
 // ============================================================
 
-interface ToolsModalProps {
+interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   agents: Agent[];
@@ -364,13 +369,13 @@ interface ToolsModalProps {
   onSkillInstalled: () => void;
 }
 
-export function ToolsModal({
+export function SettingsModal({
   isOpen,
   onClose,
   agents,
   teamId,
   onSkillInstalled,
-}: ToolsModalProps) {
+}: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState('skills');
   const [repoUrl, setRepoUrl] = useState('');
   const [skillName, setSkillName] = useState('');
@@ -450,7 +455,26 @@ export function ToolsModal({
           { repo_url: trimmedRepo, skill_name: trimmedName },
         ],
       });
-      toast('success', `Skill "${trimmedName}" added to ${agent.name}`);
+
+      // Trigger runtime installation via the leader agent
+      const leaderAgent = agents.find((a) => a.role === 'leader');
+      if (leaderAgent) {
+        try {
+          await agentsApi.installSkill(teamId, leaderAgent.id, {
+            repo_url: trimmedRepo,
+            skill_name: trimmedName,
+          });
+          toast('success', `Skill "${trimmedName}" installed on ${agent.name}`);
+        } catch (installErr) {
+          toast(
+            'error',
+            `Skill saved but runtime install failed: ${installErr instanceof Error ? installErr.message : 'Unknown error'}`,
+          );
+        }
+      } else {
+        toast('success', `Skill "${trimmedName}" added to ${agent.name} (no leader agent for runtime install)`);
+      }
+
       setRepoUrl('');
       setSkillName('');
       onSkillInstalled();
@@ -481,13 +505,13 @@ export function ToolsModal({
       ref={backdropRef}
       onClick={handleBackdropClick}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      data-testid="tools-modal"
+      data-testid="settings-modal"
     >
-      <div className="flex h-[70vh] w-[700px] max-w-[90vw] overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+      <div className="flex h-[80vh] w-[900px] max-w-[90vw] overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
         {/* Sidebar */}
         <div className="flex w-48 flex-shrink-0 flex-col border-r border-slate-700 bg-slate-800/50">
           <div className="border-b border-slate-700 px-4 py-3">
-            <h2 className="text-sm font-semibold text-white">Tools</h2>
+            <h2 className="text-sm font-semibold text-white">Settings</h2>
           </div>
           <nav className="flex-1 p-2">
             {sidebarItems.map((item) => (
@@ -499,7 +523,7 @@ export function ToolsModal({
                     ? 'bg-blue-600/20 text-blue-400'
                     : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-300'
                 }`}
-                data-testid={`tools-tab-${item.id}`}
+                data-testid={`settings-tab-${item.id}`}
               >
                 <svg
                   className="h-4 w-4"
@@ -545,7 +569,7 @@ export function ToolsModal({
             <button
               onClick={onClose}
               className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
-              data-testid="tools-modal-close"
+              data-testid="settings-modal-close"
             >
               <svg
                 className="h-5 w-5"

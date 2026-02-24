@@ -698,22 +698,22 @@ describe('TeamMonitorPage', () => {
     expect(screen.queryByTestId('inter-agent-badge')).not.toBeInTheDocument();
   });
 
-  // --- Tools button tests ---
+  // --- Settings button tests ---
 
-  it('shows tools button with green color when all skills installed', async () => {
+  it('shows settings button with green color when all skills installed', async () => {
     global.fetch = mockFetch();
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByTestId('tools-button')).toBeInTheDocument();
+      expect(screen.getByTestId('settings-button')).toBeInTheDocument();
     });
 
     // Worker agent mock has all skills installed
-    const btn = screen.getByTestId('tools-button');
+    const btn = screen.getByTestId('settings-button');
     expect(btn.className).toContain('text-green-400');
   });
 
-  it('shows tools button with red color when skills failed', async () => {
+  it('shows settings button with red color when skills failed', async () => {
     const teamWithFailed = {
       ...mockRunningTeam,
       agents: [
@@ -740,12 +740,12 @@ describe('TeamMonitorPage', () => {
     renderPage();
 
     await waitFor(() => {
-      const btn = screen.getByTestId('tools-button');
+      const btn = screen.getByTestId('settings-button');
       expect(btn.className).toContain('text-red-400');
     });
   });
 
-  it('shows tools button with yellow color when skills pending', async () => {
+  it('shows settings button with yellow color when skills pending', async () => {
     const teamWithPending = {
       ...mockRunningTeam,
       agents: [
@@ -772,23 +772,23 @@ describe('TeamMonitorPage', () => {
     renderPage();
 
     await waitFor(() => {
-      const btn = screen.getByTestId('tools-button');
+      const btn = screen.getByTestId('settings-button');
       expect(btn.className).toContain('text-yellow-400');
     });
   });
 
-  it('opens tools modal when tools button is clicked', async () => {
+  it('opens settings modal when settings button is clicked', async () => {
     global.fetch = mockFetch();
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByTestId('tools-button')).toBeInTheDocument();
+      expect(screen.getByTestId('settings-button')).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByTestId('tools-button'));
+    await userEvent.click(screen.getByTestId('settings-button'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('tools-modal')).toBeInTheDocument();
+      expect(screen.getByTestId('settings-modal')).toBeInTheDocument();
       expect(screen.getByText('Install New Skill')).toBeInTheDocument();
     });
   });

@@ -7,7 +7,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { MarkdownRenderer } from '../components/Markdown';
 import { ActivityEventCard, LiveActivityFeed } from '../components/ActivityPanel';
 import { toast } from '../components/Toast';
-import { ToolsButton, ToolsModal, hasFailedSkills, getFailureMessage } from '../components/SkillStatusPanel';
+import { SettingsButton, SettingsModal, hasFailedSkills, getFailureMessage } from '../components/SkillStatusPanel';
 import { friendlyError } from '../utils/errors';
 
 const messageTypeColors: Record<string, string> = {
@@ -119,7 +119,7 @@ export function TeamMonitorPage() {
   const [chatInputError, setChatInputError] = useState(false);
   const [filterAgent, setFilterAgent] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
-  const [toolsModalOpen, setToolsModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
   const [agentTooltipVisible, setAgentTooltipVisible] = useState(false);
 
@@ -415,32 +415,31 @@ export function TeamMonitorPage() {
                               {agent.name}
                             </span>
                             <span className="text-slate-500">
-                              {agent.role === 'leader'
-                                ? 'leader'
-                                : agent.sub_agent_description
-                                  ? agent.sub_agent_description.length > 40
-                                    ? agent.sub_agent_description.slice(0, 40) + '...'
-                                    : agent.sub_agent_description
-                                  : 'worker'}
+                              {agent.role}
                             </span>
                           </div>
                           {agent.skill_statuses &&
                             agent.skill_statuses.length > 0 && (
                               <div className="mt-0.5 flex flex-wrap gap-1">
-                                {agent.skill_statuses.map((s) => (
-                                  <span
-                                    key={s.name}
-                                    className={`rounded px-1 py-0.5 text-[10px] ${
-                                      s.status === 'installed'
-                                        ? 'bg-green-500/10 text-green-400'
-                                        : s.status === 'failed'
-                                          ? 'bg-red-500/10 text-red-400'
-                                          : 'bg-yellow-500/10 text-yellow-400'
-                                    }`}
-                                  >
-                                    {s.name}
-                                  </span>
-                                ))}
+                                {agent.skill_statuses.map((s) => {
+                                  const skillLabel = s.name.includes(':')
+                                    ? s.name.split(':').pop()!
+                                    : s.name;
+                                  return (
+                                    <span
+                                      key={s.name}
+                                      className={`rounded px-1 py-0.5 text-[10px] ${
+                                        s.status === 'installed'
+                                          ? 'bg-green-500/10 text-green-400'
+                                          : s.status === 'failed'
+                                            ? 'bg-red-500/10 text-red-400'
+                                            : 'bg-yellow-500/10 text-yellow-400'
+                                      }`}
+                                    >
+                                      {skillLabel}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             )}
                         </div>
@@ -454,11 +453,11 @@ export function TeamMonitorPage() {
         </div>
       </div>
 
-      {/* Tools Modal */}
+      {/* Settings Modal */}
       {team.agents && (
-        <ToolsModal
-          isOpen={toolsModalOpen}
-          onClose={() => setToolsModalOpen(false)}
+        <SettingsModal
+          isOpen={settingsModalOpen}
+          onClose={() => setSettingsModalOpen(false)}
           agents={team.agents}
           teamId={teamId}
           onSkillInstalled={fetchTeam}
@@ -541,9 +540,9 @@ export function TeamMonitorPage() {
           <div className="border-t border-slate-700 p-3">
             <div className="flex items-center gap-2">
               {team.agents && team.agents.length > 0 && (
-                <ToolsButton
+                <SettingsButton
                   agents={team.agents}
-                  onClick={() => setToolsModalOpen(true)}
+                  onClick={() => setSettingsModalOpen(true)}
                   disabled={team.status !== 'running'}
                 />
               )}

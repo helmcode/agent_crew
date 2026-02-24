@@ -1070,4 +1070,135 @@ describe('TeamMonitorPage', () => {
     });
     expect(screen.getByText('Send')).toBeDisabled();
   });
+
+  // --- skill_status WebSocket handler tests ---
+
+  it('calls fetchTeam on successful skill_status message', async () => {
+    const fetchMock = mockFetch();
+    global.fetch = fetchMock;
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    // Clear call count after initial load
+    const callsBefore = fetchMock.mock.calls.filter(
+      (call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.includes('/api/teams/');
+      },
+    ).length;
+
+    // Simulate a skill_status message with all skills installed (no failures)
+    act(() => {
+      wsOnMessage?.({
+        ...mockTaskLog,
+        id: 'skill-status-success-1',
+        from_agent: 'system',
+        message_type: 'skill_status',
+        payload: {
+          agent_id: 'agent-uuid-2',
+          agent_name: 'worker-agent',
+          skills: [
+            { name: 'https://github.com/anthropic/tools:read', status: 'installed' },
+            { name: 'https://github.com/anthropic/tools:bash', status: 'installed' },
+          ],
+        },
+      });
+    });
+
+    // fetchTeam should have been called again (team endpoint hit)
+    await waitFor(() => {
+      const callsAfter = fetchMock.mock.calls.filter(
+        (call) => {
+          const url = typeof call[0] === 'string' ? call[0] : '';
+          return url.includes('/api/teams/');
+        },
+      ).length;
+      expect(callsAfter).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  it('calls fetchTeam on failed skill_status message', async () => {
+    const fetchMock = mockFetch();
+    global.fetch = fetchMock;
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    const callsBefore = fetchMock.mock.calls.filter(
+      (call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.includes('/api/teams/');
+      },
+    ).length;
+
+    // Simulate a skill_status message with a failed skill
+    act(() => {
+      wsOnMessage?.({
+        ...mockTaskLog,
+        id: 'skill-status-fail-1',
+        from_agent: 'system',
+        message_type: 'skill_status',
+        payload: {
+          agent_id: 'agent-uuid-2',
+          agent_name: 'worker-agent',
+          skills: [
+            { name: 'https://github.com/anthropic/tools:read', status: 'installed' },
+            { name: 'bad-skill', status: 'failed', error: 'Not found' },
+          ],
+        },
+      });
+    });
+
+    // fetchTeam should have been called again
+    await waitFor(() => {
+      const callsAfter = fetchMock.mock.calls.filter(
+        (call) => {
+          const url = typeof call[0] === 'string' ? call[0] : '';
+          return url.includes('/api/teams/');
+        },
+      ).length;
+      expect(callsAfter).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  it('does not show error toast on successful skill_status message', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    // Simulate a successful skill_status (no failures)
+    act(() => {
+      wsOnMessage?.({
+        ...mockTaskLog,
+        id: 'skill-status-ok-1',
+        from_agent: 'system',
+        message_type: 'skill_status',
+        payload: {
+          agent_id: 'agent-uuid-2',
+          agent_name: 'worker-agent',
+          skills: [
+            { name: 'https://github.com/anthropic/tools:read', status: 'installed' },
+          ],
+        },
+      });
+    });
+
+    // Wait a tick and verify no error toast appeared
+    await new Promise((r) => setTimeout(r, 100));
+    // There should be no toast with error styling for this case
+    // We check that no red-themed toast about skill failure exists
+    const errorToasts = document.querySelectorAll('[role="alert"]');
+    const hasSkillFailureToast = Array.from(errorToasts).some(
+      (el) => el.textContent?.includes('failed') || el.textContent?.includes('Failed'),
+    );
+    expect(hasSkillFailureToast).toBe(false);
+  });
 });

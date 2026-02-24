@@ -185,16 +185,16 @@ describe('TeamBuilderPage', () => {
     });
   });
 
-  it('does not show skills section in step 2', async () => {
+  it('shows global skills section for leader in step 2', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
 
-    expect(screen.queryByText('Skills')).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText('https://github.com/owner/repo')).not.toBeInTheDocument();
+    expect(screen.getByText('Global Skills (shared with all agents)')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('https://github.com/owner/repo')).toBeInTheDocument();
   });
 
-  it('does not include skills in create payload', async () => {
+  it('does not include sub_agent_skills in leader payload when none added', async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       const method = init?.method ?? 'GET';
@@ -220,6 +220,7 @@ describe('TeamBuilderPage', () => {
       expect(createCall).toBeTruthy();
       const body = JSON.parse(createCall![1]!.body as string);
       expect(body.agents[0]).not.toHaveProperty('skills');
+      expect(body.agents[0]).not.toHaveProperty('sub_agent_skills');
     });
   });
 
@@ -296,8 +297,11 @@ describe('TeamBuilderPage', () => {
 
     // Sub-agent should show structured fields
     expect(screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('https://github.com/owner/repo')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('skill-name')).toBeInTheDocument();
+    // Both leader and sub-agent have repo/skill inputs now
+    const repoInputs = screen.getAllByPlaceholderText('https://github.com/owner/repo');
+    expect(repoInputs.length).toBe(2); // leader + sub-agent
+    const skillInputs = screen.getAllByPlaceholderText('skill-name');
+    expect(skillInputs.length).toBe(2); // leader + sub-agent
     expect(screen.getByText('Inherit (default)')).toBeInTheDocument();
 
     // Sub-agent should NOT have CLAUDE.md textarea (only 1 from the leader)
@@ -366,9 +370,13 @@ describe('TeamBuilderPage', () => {
       screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
       'Handles backend API tasks',
     );
-    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
-    const nameInput = screen.getByPlaceholderText('skill-name');
-    const addBtn = screen.getByText('Add');
+    // Use the sub-agent's repo/skill inputs (index 1, leader is index 0)
+    const repoInputs = screen.getAllByPlaceholderText('https://github.com/owner/repo');
+    const skillNameInputs = screen.getAllByPlaceholderText('skill-name');
+    const repoInput = repoInputs[1]; // sub-agent repo input
+    const nameInput = skillNameInputs[1]; // sub-agent skill name input
+    const addBtns = screen.getAllByText('Add');
+    const addBtn = addBtns[1]; // sub-agent Add button
 
     await userEvent.type(repoInput, 'https://github.com/anthropic/tools');
     await userEvent.type(nameInput, 'read');
@@ -486,9 +494,13 @@ describe('TeamBuilderPage', () => {
       screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
       'Builds frontend components',
     );
-    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
-    const nameInput = screen.getByPlaceholderText('skill-name');
-    const addBtn = screen.getByText('Add');
+    // Use sub-agent inputs (index 1, leader is index 0)
+    const repoInputs = screen.getAllByPlaceholderText('https://github.com/owner/repo');
+    const skillNameInputs = screen.getAllByPlaceholderText('skill-name');
+    const addBtns = screen.getAllByText('Add');
+    const repoInput = repoInputs[1];
+    const nameInput = skillNameInputs[1];
+    const addBtn = addBtns[1];
     await userEvent.type(repoInput, 'https://github.com/anthropic/tools');
     await userEvent.type(nameInput, 'read');
     await userEvent.click(addBtn);
@@ -626,12 +638,16 @@ describe('TeamBuilderPage', () => {
     await userEvent.click(screen.getByText('Next'));
 
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
-    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
-    const nameInput = screen.getByPlaceholderText('skill-name');
+    // Use sub-agent inputs (index 1, leader is index 0)
+    const repoInputs = screen.getAllByPlaceholderText('https://github.com/owner/repo');
+    const skillNameInputs = screen.getAllByPlaceholderText('skill-name');
+    const repoInput = repoInputs[1];
+    const nameInput = skillNameInputs[1];
+    const addBtns = screen.getAllByText('Add');
 
     await userEvent.type(repoInput, 'not-a-url');
     await userEvent.type(nameInput, 'test-skill');
-    await userEvent.click(screen.getByText('Add'));
+    await userEvent.click(addBtns[1]);
 
     // Invalid URL should not be added
     await waitFor(() => {
@@ -645,12 +661,14 @@ describe('TeamBuilderPage', () => {
     await userEvent.click(screen.getByText('Next'));
 
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
-    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
-    const nameInput = screen.getByPlaceholderText('skill-name');
+    // Use sub-agent inputs (index 1, leader is index 0)
+    const repoInputs = screen.getAllByPlaceholderText('https://github.com/owner/repo');
+    const skillNameInputs = screen.getAllByPlaceholderText('skill-name');
+    const addBtns = screen.getAllByText('Add');
 
-    await userEvent.type(repoInput, 'https://github.com/vercel-labs/agent-skills');
-    await userEvent.type(nameInput, 'react-best-practices');
-    await userEvent.click(screen.getByText('Add'));
+    await userEvent.type(repoInputs[1], 'https://github.com/vercel-labs/agent-skills');
+    await userEvent.type(skillNameInputs[1], 'react-best-practices');
+    await userEvent.click(addBtns[1]);
 
     await waitFor(() => {
       expect(screen.getByText('react-best-practices')).toBeInTheDocument();
@@ -663,9 +681,13 @@ describe('TeamBuilderPage', () => {
     await userEvent.click(screen.getByText('Next'));
 
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
-    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
-    const nameInput = screen.getByPlaceholderText('skill-name');
-    const addBtn = screen.getByText('Add');
+    // Use sub-agent inputs (index 1, leader is index 0)
+    const repoInputs = screen.getAllByPlaceholderText('https://github.com/owner/repo');
+    const skillNameInputs = screen.getAllByPlaceholderText('skill-name');
+    const addBtns = screen.getAllByText('Add');
+    const repoInput = repoInputs[1];
+    const nameInput = skillNameInputs[1];
+    const addBtn = addBtns[1];
 
     // Add 20 skills (the max)
     for (let i = 0; i < 20; i++) {
@@ -709,14 +731,25 @@ describe('TeamBuilderPage — skill interactions', () => {
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
   }
 
+  // Helper to get sub-agent skill inputs (index 1, leader is index 0)
+  function getSubAgentSkillInputs() {
+    const repoInputs = screen.getAllByPlaceholderText('https://github.com/owner/repo');
+    const skillNameInputs = screen.getAllByPlaceholderText('skill-name');
+    const addBtns = screen.getAllByText('Add');
+    return {
+      repoInput: repoInputs[1],
+      nameInput: skillNameInputs[1],
+      addBtn: addBtns[1],
+    };
+  }
+
   it('removes a skill by clicking the × button', async () => {
     await goToStep2WithSubAgent();
-    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
-    const nameInput = screen.getByPlaceholderText('skill-name');
+    const { repoInput, nameInput, addBtn } = getSubAgentSkillInputs();
 
     await userEvent.type(repoInput, 'https://github.com/jezweb/claude-skills');
     await userEvent.type(nameInput, 'fastapi');
-    await userEvent.click(screen.getByText('Add'));
+    await userEvent.click(addBtn);
     expect(screen.getByText('fastapi')).toBeInTheDocument();
 
     // Click the × button inside the skill chip
@@ -730,9 +763,7 @@ describe('TeamBuilderPage — skill interactions', () => {
 
   it('shows duplicate error for identical skills', async () => {
     await goToStep2WithSubAgent();
-    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
-    const nameInput = screen.getByPlaceholderText('skill-name');
-    const addBtn = screen.getByText('Add');
+    const { repoInput, nameInput, addBtn } = getSubAgentSkillInputs();
 
     await userEvent.type(repoInput, 'https://github.com/owner/repo');
     await userEvent.type(nameInput, 'dupe-skill');
@@ -749,10 +780,10 @@ describe('TeamBuilderPage — skill interactions', () => {
 
   it('rejects missing repository URL', async () => {
     await goToStep2WithSubAgent();
-    const nameInput = screen.getByPlaceholderText('skill-name');
+    const { nameInput, addBtn } = getSubAgentSkillInputs();
 
     await userEvent.type(nameInput, 'fastapi');
-    await userEvent.click(screen.getByText('Add'));
+    await userEvent.click(addBtn);
 
     // Skill should not be added without repo URL
     await waitFor(() => {
@@ -762,12 +793,11 @@ describe('TeamBuilderPage — skill interactions', () => {
 
   it('rejects non-HTTPS repository URL', async () => {
     await goToStep2WithSubAgent();
-    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
-    const nameInput = screen.getByPlaceholderText('skill-name');
+    const { repoInput, nameInput, addBtn } = getSubAgentSkillInputs();
 
     await userEvent.type(repoInput, 'http://github.com/owner/repo');
     await userEvent.type(nameInput, 'test-skill');
-    await userEvent.click(screen.getByText('Add'));
+    await userEvent.click(addBtn);
 
     // Skill should not be added with HTTP URL
     await waitFor(() => {
@@ -777,12 +807,11 @@ describe('TeamBuilderPage — skill interactions', () => {
 
   it('accepts valid repo URL and skill name via two fields', async () => {
     await goToStep2WithSubAgent();
-    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
-    const nameInput = screen.getByPlaceholderText('skill-name');
+    const { repoInput, nameInput, addBtn } = getSubAgentSkillInputs();
 
     await userEvent.type(repoInput, 'https://github.com/vercel-labs/agent-skills');
     await userEvent.type(nameInput, 'react-best-practices');
-    await userEvent.click(screen.getByText('Add'));
+    await userEvent.click(addBtn);
 
     await waitFor(() => {
       expect(screen.getByText('react-best-practices')).toBeInTheDocument();
@@ -791,8 +820,7 @@ describe('TeamBuilderPage — skill interactions', () => {
 
   it('adds a skill via Enter key on repo input', async () => {
     await goToStep2WithSubAgent();
-    const repoInput = screen.getByPlaceholderText('https://github.com/owner/repo');
-    const nameInput = screen.getByPlaceholderText('skill-name');
+    const { repoInput, nameInput } = getSubAgentSkillInputs();
 
     await userEvent.type(repoInput, 'https://github.com/owner/repo');
     await userEvent.type(nameInput, 'enter-skill');

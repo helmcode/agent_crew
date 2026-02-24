@@ -184,6 +184,7 @@ export function TeamBuilderPage() {
               name: a.name.trim(),
               role: 'leader' as const,
               claude_md: a.claude_md.trim() || undefined,
+              sub_agent_skills: a.sub_agent_skills.length > 0 ? a.sub_agent_skills : undefined,
             };
           }
           return {
@@ -316,20 +317,76 @@ export function TeamBuilderPage() {
               </div>
 
               {i === 0 ? (
-                /* Leader: CLAUDE.md textarea */
-                <div className="mt-3">
-                  <label className="mb-1 block text-xs text-slate-400">CLAUDE.md Content</label>
-                  <textarea
-                    value={agent.claude_md}
-                    onChange={(e) => updateAgent(i, 'claude_md', e.target.value)}
-                    onInput={autoGrow}
-                    rows={6}
-                    className="min-h-[80px] max-h-[400px] w-full resize-none overflow-y-auto rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 font-mono text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                    placeholder="# Agent instructions in Markdown..."
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    This content will be written to the agent's CLAUDE.md file at deploy time.
-                  </p>
+                /* Leader: CLAUDE.md textarea + global skills */
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">CLAUDE.md Content</label>
+                    <textarea
+                      value={agent.claude_md}
+                      onChange={(e) => updateAgent(i, 'claude_md', e.target.value)}
+                      onInput={autoGrow}
+                      rows={6}
+                      className="min-h-[80px] max-h-[400px] w-full resize-none overflow-y-auto rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 font-mono text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      placeholder="# Agent instructions in Markdown..."
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      This content will be written to the agent's CLAUDE.md file at deploy time.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">Global Skills (shared with all agents)</label>
+                    {agent.sub_agent_skills.length > 0 && (
+                      <div className="mb-2 flex flex-wrap gap-1.5">
+                        {agent.sub_agent_skills.map((skill, sIdx) => (
+                          <span key={sIdx} className="inline-flex items-center gap-1 rounded bg-slate-700 px-2 py-1 text-xs text-slate-200">
+                            <span className="font-medium">{skill.skill_name}</span>
+                            <span className="truncate max-w-[200px] text-[10px] text-slate-400" title={skill.repo_url}>
+                              ({skill.repo_url.replace('https://github.com/', '')})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeSkill(i, sIdx)}
+                              className="ml-1 leading-none text-slate-400 hover:text-red-400"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <label className="block text-xs text-slate-400 mb-1">Repository URL</label>
+                        <input
+                          type="text"
+                          className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          placeholder="https://github.com/owner/repo"
+                          value={skillRepoInputs[agent.id] ?? ''}
+                          onChange={(e) => setSkillRepoInputs({ ...skillRepoInputs, [agent.id]: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill(i); } }}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-slate-400 mb-1">Skill Name</label>
+                        <input
+                          type="text"
+                          className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          placeholder="skill-name"
+                          value={skillNameInputs[agent.id] ?? ''}
+                          onChange={(e) => setSkillNameInputs({ ...skillNameInputs, [agent.id]: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill(i); } }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500"
+                        onClick={() => addSkill(i)}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">Press Enter or click Add to add each skill. These skills are installed globally on the leader and shared with all agents.</p>
+                  </div>
                 </div>
               ) : (
                 /* Sub-agent: structured fields */
@@ -478,6 +535,7 @@ export function TeamBuilderPage() {
                         name: a.name,
                         role: 'leader',
                         claude_md: a.claude_md || undefined,
+                        sub_agent_skills: a.sub_agent_skills.length > 0 ? a.sub_agent_skills : undefined,
                       };
                     }
                     return {

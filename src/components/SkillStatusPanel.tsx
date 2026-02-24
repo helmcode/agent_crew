@@ -383,14 +383,14 @@ export function SettingsModal({
   const [installing, setInstalling] = useState(false);
   const backdropRef = useRef<HTMLDivElement>(null);
 
-  const workerAgents = agents.filter((a) => a.role === 'worker');
+  const installableAgents = agents.filter((a) => a.role === 'worker' || a.role === 'leader');
 
-  // Select first worker agent by default when modal opens
+  // Select first installable agent by default when modal opens
   useEffect(() => {
-    if (isOpen && !selectedAgentId && workerAgents.length > 0) {
-      setSelectedAgentId(workerAgents[0].id);
+    if (isOpen && !selectedAgentId && installableAgents.length > 0) {
+      setSelectedAgentId(installableAgents[0].id);
     }
-  }, [isOpen, workerAgents, selectedAgentId]);
+  }, [isOpen, installableAgents, selectedAgentId]);
 
   if (!isOpen) return null;
 
@@ -456,23 +456,20 @@ export function SettingsModal({
         ],
       });
 
-      // Trigger runtime installation via the leader agent
-      const leaderAgent = agents.find((a) => a.role === 'leader');
-      if (leaderAgent) {
-        try {
-          await agentsApi.installSkill(teamId, leaderAgent.id, {
-            repo_url: trimmedRepo,
-            skill_name: trimmedName,
-          });
-          toast('success', `Skill "${trimmedName}" installed on ${agent.name}`);
-        } catch (installErr) {
-          toast(
-            'error',
-            `Skill saved but runtime install failed: ${installErr instanceof Error ? installErr.message : 'Unknown error'}`,
-          );
-        }
-      } else {
-        toast('success', `Skill "${trimmedName}" added to ${agent.name} (no leader agent for runtime install)`);
+      // Trigger runtime installation via the target agent's ID.
+      // The backend finds the leader container for exec but updates
+      // skill_statuses on the target agent.
+      try {
+        await agentsApi.installSkill(teamId, agent.id, {
+          repo_url: trimmedRepo,
+          skill_name: trimmedName,
+        });
+        toast('success', `Skill "${trimmedName}" installed on ${agent.name}`);
+      } catch (installErr) {
+        toast(
+          'error',
+          `Skill saved but runtime install failed: ${installErr instanceof Error ? installErr.message : 'Unknown error'}`,
+        );
       }
 
       setRepoUrl('');
@@ -641,7 +638,7 @@ export function SettingsModal({
                   </div>
                 )}
 
-                {workerAgents.length > 0 && (
+                {installableAgents.length > 0 && (
                   <div
                     className="rounded-lg border border-dashed border-slate-700 p-4"
                     data-testid="install-skill-form"
@@ -660,9 +657,9 @@ export function SettingsModal({
                           className="w-full rounded border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
                           data-testid="skill-agent-select"
                         >
-                          {workerAgents.map((a) => (
+                          {installableAgents.map((a) => (
                             <option key={a.id} value={a.id}>
-                              {a.name}
+                              {a.name}{a.role === 'leader' ? ' (global)' : ''}
                             </option>
                           ))}
                         </select>

@@ -181,10 +181,11 @@ export function TeamMonitorPage() {
           setLiveActivityEvents((prev) => [...prev, log].slice(-50));
         }
 
-        // Toast notification for failed skill installations
-        if (log.message_type === 'skill_status' && hasFailedSkills(log)) {
-          toast('error', getFailureMessage(log));
-          // Refresh team data to pick up updated skill_statuses on agents
+        // Refresh team data on any skill_status message (installed or failed)
+        if (log.message_type === 'skill_status') {
+          if (hasFailedSkills(log)) {
+            toast('error', getFailureMessage(log));
+          }
           fetchTeam();
         }
 

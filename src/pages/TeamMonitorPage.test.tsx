@@ -106,12 +106,12 @@ describe('TeamMonitorPage', () => {
     });
   });
 
-  it('renders agent list in left panel', async () => {
+  it('renders agent count badge in header', async () => {
     global.fetch = mockFetch();
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText('test-agent')).toBeInTheDocument();
-      expect(screen.getAllByText('worker-agent').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByTestId('agent-count-badge')).toBeInTheDocument();
+      expect(screen.getByTestId('agent-count-badge').textContent).toContain('2 agents');
     });
   });
 
@@ -163,7 +163,7 @@ describe('TeamMonitorPage', () => {
     });
   });
 
-  it('filters messages by agent', async () => {
+  it('filters messages by agent via filter popover', async () => {
     global.fetch = mockFetch([], [toolLog1, toolLog2]);
     renderPage();
 
@@ -172,14 +172,21 @@ describe('TeamMonitorPage', () => {
       expect(screen.getByText('Lint passed')).toBeInTheDocument();
     });
 
-    const agentFilter = screen.getAllByRole('combobox')[0];
-    await userEvent.selectOptions(agentFilter, 'agent-alpha');
+    // Open filter popover
+    await userEvent.click(screen.getByTestId('activity-filter-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('activity-filter-popover')).toBeInTheDocument();
+    });
+
+    const selects = within(screen.getByTestId('activity-filter-popover')).getAllByRole('combobox');
+    await userEvent.selectOptions(selects[0], 'agent-alpha');
 
     expect(screen.getByText('Running lint check')).toBeInTheDocument();
     expect(screen.queryByText('Lint passed')).not.toBeInTheDocument();
   });
 
-  it('filters messages by type', async () => {
+  it('filters messages by type via filter popover', async () => {
     global.fetch = mockFetch([], [toolLog1, toolLog2]);
     renderPage();
 
@@ -188,8 +195,15 @@ describe('TeamMonitorPage', () => {
       expect(screen.getByText('Lint passed')).toBeInTheDocument();
     });
 
-    const typeFilter = screen.getAllByRole('combobox')[1];
-    await userEvent.selectOptions(typeFilter, 'tool_result');
+    // Open filter popover
+    await userEvent.click(screen.getByTestId('activity-filter-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('activity-filter-popover')).toBeInTheDocument();
+    });
+
+    const selects = within(screen.getByTestId('activity-filter-popover')).getAllByRole('combobox');
+    await userEvent.selectOptions(selects[1], 'tool_result');
 
     expect(screen.queryByText('Running lint check')).not.toBeInTheDocument();
     expect(screen.getByText('Lint passed')).toBeInTheDocument();
@@ -632,33 +646,35 @@ describe('TeamMonitorPage', () => {
 
   // --- Single-leader architecture: agents panel tests ---
 
-  it('shows leader agent with container status dot', async () => {
+  it('shows agent info icon and tooltip on hover', async () => {
     global.fetch = mockFetch();
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('test-agent')).toBeInTheDocument();
+      expect(screen.getByTestId('agent-count-badge')).toBeInTheDocument();
     });
 
-    // Leader should have container status dot
-    expect(screen.getByTestId('agent-dot-test-agent')).toBeInTheDocument();
-    expect(screen.getByText('leader')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-info-icon')).toBeInTheDocument();
+    // Tooltip not visible initially
+    expect(screen.queryByTestId('agent-tooltip')).not.toBeInTheDocument();
   });
 
-  it('shows sub-agent with file icon and description instead of container dot', async () => {
+  it('shows agent details in tooltip on hover', async () => {
     global.fetch = mockFetch();
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getAllByText('worker-agent').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByTestId('agent-count-badge')).toBeInTheDocument();
     });
 
-    // Sub-agent should have file icon, not container dot
-    expect(screen.getByTestId('sub-agent-icon-worker-agent')).toBeInTheDocument();
-    expect(screen.queryByTestId('agent-dot-worker-agent')).not.toBeInTheDocument();
+    // Hover over the agent count area to show tooltip
+    await userEvent.hover(screen.getByTestId('agent-count-badge'));
 
-    // Sub-agent should show its delegation description
-    expect(screen.getByText(mockWorkerAgent.sub_agent_description!)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-tooltip')).toBeInTheDocument();
+      expect(screen.getByText('test-agent')).toBeInTheDocument();
+      expect(screen.getByText('worker-agent')).toBeInTheDocument();
+    });
   });
 
   it('does not render inter-agent badge in activity feed', async () => {
@@ -682,57 +698,22 @@ describe('TeamMonitorPage', () => {
     expect(screen.queryByTestId('inter-agent-badge')).not.toBeInTheDocument();
   });
 
-  // --- Skill status indicator tests ---
+  // --- Tools button tests ---
 
-  it('shows skill status indicator with all-installed state for sub-agent', async () => {
+  it('shows tools button with green color when all skills installed', async () => {
     global.fetch = mockFetch();
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getAllByText('worker-agent').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByTestId('tools-button')).toBeInTheDocument();
     });
 
-    // Worker agent mock has skill_statuses with 2 installed skills
-    const indicator = screen.getByTestId('skill-status-worker-agent');
-    expect(indicator).toBeInTheDocument();
-    expect(indicator).toHaveClass('text-green-400');
-    expect(indicator.textContent).toContain('2');
+    // Worker agent mock has all skills installed
+    const btn = screen.getByTestId('tools-button');
+    expect(btn.className).toContain('text-green-400');
   });
 
-  it('shows skill status indicator with pending state', async () => {
-    const teamWithPending = {
-      ...mockRunningTeam,
-      agents: [
-        { ...mockRunningTeam.agents![0] },
-        {
-          ...mockWorkerAgent,
-          id: 'agent-uuid-2',
-          skill_statuses: [
-            { name: '@anthropic/tool-read', status: 'installed' },
-            { name: '@anthropic/tool-bash', status: 'pending' },
-          ],
-        },
-      ],
-    };
-
-    global.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-      if (url.includes('/activity')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      if (url.includes('/messages')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      if (url.includes('/api/teams/')) return new Response(JSON.stringify(teamWithPending), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
-    });
-
-    renderPage();
-
-    await waitFor(() => {
-      const indicator = screen.getByTestId('skill-status-worker-agent');
-      expect(indicator).toHaveClass('text-yellow-400');
-      expect(indicator.textContent).toContain('1/2');
-    });
-  });
-
-  it('shows skill status indicator with failed state and skill names', async () => {
+  it('shows tools button with red color when skills failed', async () => {
     const teamWithFailed = {
       ...mockRunningTeam,
       agents: [
@@ -759,23 +740,57 @@ describe('TeamMonitorPage', () => {
     renderPage();
 
     await waitFor(() => {
-      const indicator = screen.getByTestId('skill-status-worker-agent');
-      expect(indicator).toHaveClass('text-red-400');
-      const failedNames = screen.getByTestId('skill-failed-names-worker-agent');
-      expect(failedNames.textContent).toBe('bad-skill');
+      const btn = screen.getByTestId('tools-button');
+      expect(btn.className).toContain('text-red-400');
     });
   });
 
-  it('does not show skill status indicator for leader agent', async () => {
+  it('shows tools button with yellow color when skills pending', async () => {
+    const teamWithPending = {
+      ...mockRunningTeam,
+      agents: [
+        { ...mockRunningTeam.agents![0] },
+        {
+          ...mockWorkerAgent,
+          id: 'agent-uuid-2',
+          skill_statuses: [
+            { name: '@anthropic/tool-read', status: 'installed' },
+            { name: '@anthropic/tool-bash', status: 'pending' },
+          ],
+        },
+      ],
+    };
+
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/activity')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/messages')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/api/teams/')) return new Response(JSON.stringify(teamWithPending), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      const btn = screen.getByTestId('tools-button');
+      expect(btn.className).toContain('text-yellow-400');
+    });
+  });
+
+  it('opens tools modal when tools button is clicked', async () => {
     global.fetch = mockFetch();
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('test-agent')).toBeInTheDocument();
+      expect(screen.getByTestId('tools-button')).toBeInTheDocument();
     });
 
-    // Leader agent should not have skill status indicator
-    expect(screen.queryByTestId('skill-status-test-agent')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByTestId('tools-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tools-modal')).toBeInTheDocument();
+      expect(screen.getByText('Install New Skill')).toBeInTheDocument();
+    });
   });
 
   // --- Live activity feed tests ---

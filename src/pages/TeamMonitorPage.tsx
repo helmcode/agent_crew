@@ -1,13 +1,13 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import type { Team, TaskLog, ContainerStatus, SkillStatus } from '../types';
+import type { Team, TaskLog, ContainerStatus } from '../types';
 import { teamsApi, messagesApi, activityApi, chatApi } from '../services/api';
 import { connectTeamActivity, type ConnectionState } from '../services/websocket';
 import { StatusBadge } from '../components/StatusBadge';
 import { MarkdownRenderer } from '../components/Markdown';
 import { ActivityEventCard, LiveActivityFeed } from '../components/ActivityPanel';
 import { toast } from '../components/Toast';
-import { SkillStatusPanel, hasFailedSkills, getFailureMessage } from '../components/SkillStatusPanel';
+import { ToolsButton, ToolsModal, hasFailedSkills, getFailureMessage } from '../components/SkillStatusPanel';
 import { friendlyError } from '../utils/errors';
 
 const messageTypeColors: Record<string, string> = {
@@ -103,58 +103,6 @@ function getChatText(msg: TaskLog): string {
   }
 }
 
-function SkillStatusIndicator({ statuses, agentName }: { statuses: SkillStatus[]; agentName: string }) {
-  const failed = statuses.filter((s) => s.status === 'failed');
-  const pending = statuses.filter((s) => s.status === 'pending');
-  const installed = statuses.filter((s) => s.status === 'installed');
-
-  if (failed.length > 0) {
-    const failedNames = failed.map((s) => s.name).join(', ');
-    return (
-      <span
-        data-testid={`skill-status-${agentName}`}
-        className="flex items-center gap-1 rounded bg-red-500/10 px-1.5 py-0.5 text-xs text-red-400"
-        title={`Failed: ${failedNames}`}
-      >
-        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-        </svg>
-        <span data-testid={`skill-failed-names-${agentName}`}>{failedNames}</span>
-      </span>
-    );
-  }
-
-  if (pending.length > 0) {
-    return (
-      <span
-        data-testid={`skill-status-${agentName}`}
-        className="flex items-center gap-1 rounded bg-yellow-500/10 px-1.5 py-0.5 text-xs text-yellow-400"
-        title={`Installing ${pending.length} skill${pending.length > 1 ? 's' : ''}...`}
-      >
-        <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-400" />
-        {pending.length}/{statuses.length}
-      </span>
-    );
-  }
-
-  if (installed.length === statuses.length) {
-    return (
-      <span
-        data-testid={`skill-status-${agentName}`}
-        className="flex items-center gap-1 rounded bg-green-500/10 px-1.5 py-0.5 text-xs text-green-400"
-        title={`${installed.length} skill${installed.length > 1 ? 's' : ''} installed`}
-      >
-        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        </svg>
-        {installed.length}
-      </span>
-    );
-  }
-
-  return null;
-}
-
 export function TeamMonitorPage() {
   const { id } = useParams<{ id: string }>();
   const teamId = id!;
@@ -171,11 +119,15 @@ export function TeamMonitorPage() {
   const [chatInputError, setChatInputError] = useState(false);
   const [filterAgent, setFilterAgent] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [toolsModalOpen, setToolsModalOpen] = useState(false);
+  const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
+  const [agentTooltipVisible, setAgentTooltipVisible] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const activityEndRef = useRef<HTMLDivElement>(null);
   const activityContainerRef = useRef<HTMLDivElement>(null);
+  const filterPopoverRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [activityAutoScroll, setActivityAutoScroll] = useState(true);
   // Track previous message counts to only scroll when NEW messages arrive,
@@ -345,6 +297,18 @@ export function TeamMonitorPage() {
     }
   }
 
+  // Close filter popover when clicking outside
+  useEffect(() => {
+    if (!filterPopoverOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (filterPopoverRef.current && !filterPopoverRef.current.contains(e.target as Node)) {
+        setFilterPopoverOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [filterPopoverOpen]);
+
   const filteredActivity = activityMessages.filter((msg) => {
     if (msg.message_type === 'status_update') return false;
     if (filterAgent !== 'all' && msg.from_agent !== filterAgent) return false;
@@ -402,41 +366,103 @@ export function TeamMonitorPage() {
         )}
         <div className="ml-auto flex items-center gap-2">
           {team.agents && team.agents.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              {team.agents.map((agent) => (
-                <div key={agent.id} className="group relative flex items-center gap-1.5 rounded-md bg-slate-900/50 px-2 py-1">
-                  {agent.role === 'leader' ? (
-                    <>
-                      <span data-testid={`agent-dot-${agent.name}`} className={`h-2 w-2 rounded-full ${dotColor[agent.container_status]} ${agent.container_status === 'running' ? 'animate-pulse' : ''}`} />
-                      <span className="text-xs text-slate-300">{agent.name}</span>
-                      <span className="text-xs text-slate-600">leader</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg data-testid={`sub-agent-icon-${agent.name}`} className="h-3 w-3 flex-shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <span className="text-xs text-slate-300">{agent.name}</span>
-                      {agent.sub_agent_description && (
-                        <span className="max-w-[12rem] truncate text-xs text-slate-500" title={agent.sub_agent_description}>
-                          {agent.sub_agent_description}
-                        </span>
-                      )}
-                      {agent.skill_statuses && agent.skill_statuses.length > 0 && (
-                        <SkillStatusIndicator statuses={agent.skill_statuses} agentName={agent.name} />
-                      )}
-                    </>
-                  )}
+            <div
+              className="relative flex items-center gap-1.5"
+              onMouseEnter={() => setAgentTooltipVisible(true)}
+              onMouseLeave={() => setAgentTooltipVisible(false)}
+            >
+              <span
+                className="rounded-full bg-slate-700/50 px-2.5 py-1 text-xs font-medium text-slate-300"
+                data-testid="agent-count-badge"
+              >
+                {team.agents.length} agent{team.agents.length !== 1 ? 's' : ''}
+              </span>
+              <button
+                className="rounded p-0.5 text-slate-400 transition-colors hover:text-white"
+                data-testid="agent-info-icon"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </button>
+              {agentTooltipVisible && (
+                <div
+                  className="absolute right-0 top-full z-40 mt-2 w-72 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-xl"
+                  data-testid="agent-tooltip"
+                >
+                  <div className="space-y-2">
+                    {team.agents.map((agent) => (
+                      <div
+                        key={agent.id}
+                        className="flex items-start gap-2 text-xs"
+                      >
+                        <span
+                          className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${dotColor[agent.container_status]}`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-slate-200">
+                              {agent.name}
+                            </span>
+                            <span className="text-slate-500">
+                              {agent.role === 'leader'
+                                ? 'leader'
+                                : agent.sub_agent_description
+                                  ? agent.sub_agent_description.length > 40
+                                    ? agent.sub_agent_description.slice(0, 40) + '...'
+                                    : agent.sub_agent_description
+                                  : 'worker'}
+                            </span>
+                          </div>
+                          {agent.skill_statuses &&
+                            agent.skill_statuses.length > 0 && (
+                              <div className="mt-0.5 flex flex-wrap gap-1">
+                                {agent.skill_statuses.map((s) => (
+                                  <span
+                                    key={s.name}
+                                    className={`rounded px-1 py-0.5 text-[10px] ${
+                                      s.status === 'installed'
+                                        ? 'bg-green-500/10 text-green-400'
+                                        : s.status === 'failed'
+                                          ? 'bg-red-500/10 text-red-400'
+                                          : 'bg-yellow-500/10 text-yellow-400'
+                                    }`}
+                                  >
+                                    {s.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Skill Status Panel — collapsible, only shown when agents have skills */}
-      {team.agents && team.agents.length > 0 && (
-        <SkillStatusPanel agents={team.agents} />
+      {/* Tools Modal */}
+      {team.agents && (
+        <ToolsModal
+          isOpen={toolsModalOpen}
+          onClose={() => setToolsModalOpen(false)}
+          agents={team.agents}
+          teamId={teamId}
+          onSkillInstalled={fetchTeam}
+        />
       )}
 
       {/* Main Content: Chat (left, large) + Activity (right, narrow) */}
@@ -513,7 +539,14 @@ export function TeamMonitorPage() {
             <div ref={chatEndRef} />
           </div>
           <div className="border-t border-slate-700 p-3">
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              {team.agents && team.agents.length > 0 && (
+                <ToolsButton
+                  agents={team.agents}
+                  onClick={() => setToolsModalOpen(true)}
+                  disabled={team.status !== 'running'}
+                />
+              )}
               <input
                 value={chatMessage}
                 onChange={(e) => {
@@ -550,27 +583,89 @@ export function TeamMonitorPage() {
                 <span className="text-xs text-slate-500">{wsState}</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <select
-                value={filterAgent}
-                onChange={(e) => setFilterAgent(e.target.value)}
-                className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-300 focus:outline-none"
+            <div className="relative" ref={filterPopoverRef}>
+              <button
+                onClick={() => setFilterPopoverOpen(!filterPopoverOpen)}
+                className={`flex items-center gap-1 rounded p-1.5 text-xs transition-colors ${
+                  filterAgent !== 'all' || filterType !== 'all'
+                    ? 'bg-blue-600/20 text-blue-400'
+                    : 'text-slate-400 hover:bg-slate-700 hover:text-slate-300'
+                }`}
+                data-testid="activity-filter-button"
+                title="Filter activity"
               >
-                <option value="all">All agents</option>
-                {agentNames.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-300 focus:outline-none"
-              >
-                <option value="all">All types</option>
-                {messageTypes.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+                  />
+                </svg>
+                {(filterAgent !== 'all' || filterType !== 'all') && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+                )}
+              </button>
+              {filterPopoverOpen && (
+                <div
+                  className="absolute right-0 top-full z-30 mt-1 w-56 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-xl"
+                  data-testid="activity-filter-popover"
+                >
+                  <div className="space-y-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-400">
+                        Agent
+                      </label>
+                      <select
+                        value={filterAgent}
+                        onChange={(e) => setFilterAgent(e.target.value)}
+                        className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-300 focus:outline-none"
+                      >
+                        <option value="all">All agents</option>
+                        {agentNames.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-400">
+                        Type
+                      </label>
+                      <select
+                        value={filterType}
+                        onChange={(e) => setFilterType(e.target.value)}
+                        className="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-300 focus:outline-none"
+                      >
+                        <option value="all">All types</option>
+                        {messageTypes.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {(filterAgent !== 'all' || filterType !== 'all') && (
+                      <button
+                        onClick={() => {
+                          setFilterAgent('all');
+                          setFilterType('all');
+                        }}
+                        className="w-full rounded bg-slate-700 px-2 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-600"
+                        data-testid="clear-filters-button"
+                      >
+                        Clear filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div

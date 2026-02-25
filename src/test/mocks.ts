@@ -90,6 +90,7 @@ export const mockSetting: Setting = {
   id: 1,
   key: 'api_key',
   value: 'sk-test-123',
+  is_secret: false,
   updated_at: '2026-01-01T00:00:00Z',
 };
 

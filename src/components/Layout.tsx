@@ -14,7 +14,7 @@ const navItems = [
   },
   {
     to: '/settings',
-    label: 'Settings',
+    label: 'Variables',
     end: false,
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

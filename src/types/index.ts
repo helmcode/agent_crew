@@ -66,6 +66,7 @@ export interface Setting {
   id: number;
   key: string;
   value: string;
+  is_secret: boolean;
   updated_at: string;
 }
 
@@ -133,4 +134,5 @@ export interface ChatResponse {
 export interface UpdateSettingsRequest {
   key: string;
   value: string;
+  is_secret: boolean;
 }

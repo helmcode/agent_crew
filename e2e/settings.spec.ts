@@ -25,9 +25,9 @@ test.describe('Variables Page', () => {
     await expect(page.getByRole('heading', { name: 'Variables' })).toBeVisible();
   });
 
-  test('shows Add Variable button with plus icon', async ({ page }) => {
+  test('shows Variable button with plus icon', async ({ page }) => {
     await page.goto('/settings');
-    const addBtn = page.getByRole('button', { name: 'Add Variable' });
+    const addBtn = page.getByRole('button', { name: 'Variable' });
     await expect(addBtn).toBeVisible();
     // Verify SVG plus icon is present inside the button
     const svg = addBtn.locator('svg');
@@ -77,9 +77,9 @@ test.describe('Variables Page', () => {
     await expect(page.getByText('No matching variables')).toBeVisible();
   });
 
-  test('opens New Variable form on Add Variable click', async ({ page }) => {
+  test('opens New Variable form on Variable button click', async ({ page }) => {
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Add Variable' }).click();
+    await page.getByRole('button', { name: 'Variable' }).click();
     await expect(page.getByText('New Variable')).toBeVisible();
     await expect(page.getByPlaceholder('variable_key')).toBeVisible();
     await expect(page.getByPlaceholder('value')).toBeVisible();
@@ -87,21 +87,21 @@ test.describe('Variables Page', () => {
 
   test('shows Save and Cancel buttons in form', async ({ page }) => {
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Add Variable' }).click();
+    await page.getByRole('button', { name: 'Variable' }).click();
     await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
   });
 
   test('Save button is disabled when key is empty', async ({ page }) => {
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Add Variable' }).click();
+    await page.getByRole('button', { name: 'Variable' }).click();
     const saveBtn = page.getByRole('button', { name: 'Save' });
     await expect(saveBtn).toBeDisabled();
   });
 
   test('Save button is enabled when key has value', async ({ page }) => {
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Add Variable' }).click();
+    await page.getByRole('button', { name: 'Variable' }).click();
     await page.getByPlaceholder('variable_key').fill('NEW_KEY');
     const saveBtn = page.getByRole('button', { name: 'Save' });
     await expect(saveBtn).toBeEnabled();
@@ -109,7 +109,7 @@ test.describe('Variables Page', () => {
 
   test('Cancel closes the form', async ({ page }) => {
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Add Variable' }).click();
+    await page.getByRole('button', { name: 'Variable' }).click();
     await expect(page.getByText('New Variable')).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByText('New Variable')).not.toBeVisible();
@@ -117,7 +117,7 @@ test.describe('Variables Page', () => {
 
   test('key input is editable for new variables', async ({ page }) => {
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Add Variable' }).click();
+    await page.getByRole('button', { name: 'Variable' }).click();
     const keyInput = page.getByPlaceholder('variable_key');
     await keyInput.fill('MY_NEW_KEY');
     await expect(keyInput).toHaveValue('MY_NEW_KEY');
@@ -126,7 +126,7 @@ test.describe('Variables Page', () => {
 
   test('shows secret toggle in create form', async ({ page }) => {
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Add Variable' }).click();
+    await page.getByRole('button', { name: 'Variable' }).click();
     const toggle = page.getByRole('switch');
     await expect(toggle).toBeVisible();
     await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -134,7 +134,7 @@ test.describe('Variables Page', () => {
 
   test('toggling secret changes input type to password', async ({ page }) => {
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Add Variable' }).click();
+    await page.getByRole('button', { name: 'Variable' }).click();
 
     // Initially text input
     const valueInput = page.getByPlaceholder('value');
@@ -171,7 +171,7 @@ test.describe('Variables Page', () => {
     });
 
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Add Variable' }).click();
+    await page.getByRole('button', { name: 'Variable' }).click();
     await page.getByPlaceholder('variable_key').fill('MY_SECRET');
     await page.getByRole('switch').click();
     await page.getByPlaceholder('Enter secret value').fill('super-secret-value');

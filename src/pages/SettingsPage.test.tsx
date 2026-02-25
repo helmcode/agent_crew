@@ -33,13 +33,13 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('opens new variable form on Add Variable click', async () => {
+  it('opens new variable form on Variable button click', async () => {
     global.fetch = createFetchMock({ '/api/settings': { body: [] } });
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Add Variable')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Variable' })).toBeInTheDocument();
     });
-    await userEvent.click(screen.getByText('Add Variable'));
+    await userEvent.click(screen.getByRole('button', { name: 'Variable' }));
     expect(screen.getByText('New Variable')).toBeInTheDocument();
   });
 
@@ -90,10 +90,10 @@ describe('SettingsPage', () => {
 
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Add Variable')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Variable' })).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByText('Add Variable'));
+    await userEvent.click(screen.getByRole('button', { name: 'Variable' }));
     await userEvent.type(screen.getByPlaceholderText('variable_key'), 'new_key');
     await userEvent.type(screen.getByPlaceholderText('value'), 'new_value');
     await userEvent.click(screen.getByText('Save'));
@@ -113,10 +113,10 @@ describe('SettingsPage', () => {
     global.fetch = createFetchMock({ '/api/settings': { body: [] } });
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Add Variable')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Variable' })).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByText('Add Variable'));
+    await userEvent.click(screen.getByRole('button', { name: 'Variable' }));
     expect(screen.getByText('Save')).toBeDisabled();
   });
 
@@ -124,10 +124,10 @@ describe('SettingsPage', () => {
     global.fetch = createFetchMock({ '/api/settings': { body: [mockSetting] } });
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Add Variable')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Variable' })).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByText('Add Variable'));
+    await userEvent.click(screen.getByRole('button', { name: 'Variable' }));
     expect(screen.getByText('New Variable')).toBeInTheDocument();
 
     await userEvent.click(screen.getByText('Cancel'));
@@ -307,10 +307,10 @@ describe('SettingsPage', () => {
 
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Add Variable')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Variable' })).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByText('Add Variable'));
+    await userEvent.click(screen.getByRole('button', { name: 'Variable' }));
     await userEvent.type(screen.getByPlaceholderText('variable_key'), 'my_secret');
 
     // Enable secret toggle

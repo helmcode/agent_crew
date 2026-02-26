@@ -136,3 +136,52 @@ export interface UpdateSettingsRequest {
   value: string;
   is_secret: boolean;
 }
+
+// Schedules
+
+export type ScheduleStatus = 'idle' | 'running' | 'error';
+
+export type ScheduleRunStatus = 'running' | 'success' | 'failed' | 'timeout';
+
+export interface Schedule {
+  id: string;
+  name: string;
+  team_id: string;
+  team_name?: string;
+  prompt: string;
+  cron_expression: string;
+  timezone: string;
+  enabled: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  status: ScheduleStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleRun {
+  id: string;
+  schedule_id: string;
+  team_deployment_id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: ScheduleRunStatus;
+  error: string;
+}
+
+export interface CreateScheduleRequest {
+  name: string;
+  team_id: string;
+  prompt: string;
+  cron_expression: string;
+  timezone: string;
+  enabled: boolean;
+}
+
+export interface UpdateScheduleRequest {
+  name?: string;
+  prompt?: string;
+  cron_expression?: string;
+  timezone?: string;
+  enabled?: boolean;
+}

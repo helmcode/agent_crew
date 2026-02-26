@@ -4,6 +4,9 @@ import { ToastContainer } from './components/Toast';
 import { TeamsListPage } from './pages/TeamsListPage';
 import { TeamBuilderPage } from './pages/TeamBuilderPage';
 import { TeamMonitorPage } from './pages/TeamMonitorPage';
+import { SchedulesListPage } from './pages/SchedulesListPage';
+import { ScheduleBuilderPage } from './pages/ScheduleBuilderPage';
+import { ScheduleDetailPage } from './pages/ScheduleDetailPage';
 import { SettingsPage } from './pages/SettingsPage';
 
 export default function App() {
@@ -14,6 +17,9 @@ export default function App() {
           <Route path="/" element={<TeamsListPage />} />
           <Route path="/teams/new" element={<TeamBuilderPage />} />
           <Route path="/teams/:id" element={<TeamMonitorPage />} />
+          <Route path="/schedules" element={<SchedulesListPage />} />
+          <Route path="/schedules/new" element={<ScheduleBuilderPage />} />
+          <Route path="/schedules/:id" element={<ScheduleDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>

@@ -10,6 +10,10 @@ import type {
   ChatRequest,
   ChatResponse,
   UpdateSettingsRequest,
+  Schedule,
+  ScheduleRun,
+  CreateScheduleRequest,
+  UpdateScheduleRequest,
 } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -138,6 +142,30 @@ export const activityApi = {
     const qs = params.toString();
     return request<TaskLog[]>(`/api/teams/${teamId}/activity${qs ? `?${qs}` : ''}`);
   },
+};
+
+// Schedules
+export const schedulesApi = {
+  list: () => request<Schedule[]>('/api/schedules'),
+  get: (id: string) => request<Schedule>(`/api/schedules/${id}`),
+  create: (data: CreateScheduleRequest) =>
+    request<Schedule>('/api/schedules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: UpdateScheduleRequest) =>
+    request<Schedule>(`/api/schedules/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request<void>(`/api/schedules/${id}`, { method: 'DELETE' }),
+  toggle: (id: string) =>
+    request<Schedule>(`/api/schedules/${id}/toggle`, { method: 'POST' }),
+  runs: (scheduleId: string) =>
+    request<ScheduleRun[]>(`/api/schedules/${scheduleId}/runs`),
+  getRun: (scheduleId: string, runId: string) =>
+    request<ScheduleRun>(`/api/schedules/${scheduleId}/runs/${runId}`),
 };
 
 // Settings

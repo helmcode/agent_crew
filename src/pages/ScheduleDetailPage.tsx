@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Schedule, ScheduleRun } from '../types';
 import { schedulesApi } from '../services/api';
@@ -12,6 +12,32 @@ const runStatusStyles: Record<string, { bg: string; dot: string; pulse: boolean 
   failed: { bg: 'bg-red-500/20 text-red-400', dot: 'bg-red-400', pulse: false },
   timeout: { bg: 'bg-yellow-500/20 text-yellow-400', dot: 'bg-yellow-400', pulse: false },
 };
+
+const BASE_POLL_INTERVAL = 10_000;
+const MAX_POLL_INTERVAL = 120_000;
+
+/** Strips potential stack traces, file paths, and sensitive data from error messages. */
+function sanitizeRunError(error: string | null | undefined): string {
+  if (!error) return '-';
+
+  // Strip file paths (unix and windows)
+  let sanitized = error.replace(/\/[\w./-]+/g, '[path]');
+  sanitized = sanitized.replace(/[A-Z]:\\[\w.\\-]+/gi, '[path]');
+
+  // Strip anything that looks like an API key or token (long hex/base64 strings)
+  sanitized = sanitized.replace(/\b[A-Za-z0-9+/=_-]{32,}\b/g, '[redacted]');
+
+  // Strip stack trace lines (e.g. "at Function.run (/app/...)")
+  sanitized = sanitized.replace(/\s+at\s+.+/g, '');
+
+  // Truncate to a safe display length
+  const MAX_LEN = 200;
+  if (sanitized.length > MAX_LEN) {
+    sanitized = sanitized.slice(0, MAX_LEN) + '...';
+  }
+
+  return sanitized.trim() || 'Execution failed';
+}
 
 function formatDuration(start: string, end: string | null): string {
   if (!end) return 'Running...';
@@ -43,19 +69,25 @@ export function ScheduleDetailPage() {
   const [togglingEnabled, setTogglingEnabled] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const consecutiveFailures = useRef(0);
+  const pollTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const fetchSchedule = useCallback(async () => {
     if (!id) return;
     try {
       const data = await schedulesApi.get(id);
       setSchedule(data);
+      consecutiveFailures.current = 0;
     } catch (err) {
-      toast('error', friendlyError(err, 'Failed to load schedule.'));
-      navigate('/schedules');
+      if (loading) {
+        toast('error', friendlyError(err, 'Failed to load schedule.'));
+        navigate('/schedules');
+      }
+      consecutiveFailures.current += 1;
     } finally {
       setLoading(false);
     }
-  }, [id, navigate]);
+  }, [id, navigate, loading]);
 
   const fetchRuns = useCallback(async () => {
     if (!id) return;
@@ -63,21 +95,28 @@ export function ScheduleDetailPage() {
       const response = await schedulesApi.runs(id);
       setRuns(response?.data ?? []);
     } catch {
-      // Silently fail for runs — schedule detail is more important
+      consecutiveFailures.current += 1;
     } finally {
       setLoadingRuns(false);
     }
   }, [id]);
 
+  const schedulePoll = useCallback(() => {
+    const backoff = Math.min(
+      BASE_POLL_INTERVAL * Math.pow(2, consecutiveFailures.current),
+      MAX_POLL_INTERVAL,
+    );
+    pollTimer.current = setTimeout(() => {
+      Promise.all([fetchSchedule(), fetchRuns()]).finally(schedulePoll);
+    }, backoff);
+  }, [fetchSchedule, fetchRuns]);
+
   useEffect(() => {
     fetchSchedule();
     fetchRuns();
-    const interval = setInterval(() => {
-      fetchSchedule();
-      fetchRuns();
-    }, 10_000);
-    return () => clearInterval(interval);
-  }, [fetchSchedule, fetchRuns]);
+    schedulePoll();
+    return () => clearTimeout(pollTimer.current);
+  }, [fetchSchedule, fetchRuns, schedulePoll]);
 
   async function handleToggle() {
     if (!schedule) return;
@@ -299,8 +338,8 @@ export function ScheduleDetailPage() {
                       <td className="py-2.5 pr-4 font-mono text-xs text-slate-400">
                         {formatDuration(run.started_at, run.finished_at)}
                       </td>
-                      <td className="max-w-xs truncate py-2.5 pr-4 text-xs text-red-400" title={run.error || undefined}>
-                        {run.error || '-'}
+                      <td className="max-w-xs truncate py-2.5 pr-4 text-xs text-red-400" title={run.error ? 'Execution failed — see logs for details' : undefined}>
+                        {sanitizeRunError(run.error)}
                       </td>
                       <td className="py-2.5">
                         {run.team_deployment_id && (

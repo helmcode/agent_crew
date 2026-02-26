@@ -9,9 +9,18 @@ const ALLOWED_ELEMENTS = [
   'h1', 'h2', 'h3', 'a', 'blockquote', 'hr', 'br',
 ];
 
+const SAFE_URL_PROTOCOLS = /^(https?:|mailto:)/i;
+
+function sanitizeHref(href: string | undefined): string | undefined {
+  if (!href) return undefined;
+  if (SAFE_URL_PROTOCOLS.test(href)) return href;
+  return undefined;
+}
+
 export function MarkdownRenderer({ children }: MarkdownRendererProps) {
   return (
     <ReactMarkdown
+      skipHtml
       allowedElements={ALLOWED_ELEMENTS}
       components={{
         p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
@@ -43,16 +52,20 @@ export function MarkdownRenderer({ children }: MarkdownRendererProps) {
         h3: ({ children }) => (
           <h3 className="mb-1 text-sm font-bold">{children}</h3>
         ),
-        a: ({ children, href }) => (
-          <a
-            href={href}
-            className="text-blue-400 underline hover:text-blue-300"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {children}
-          </a>
-        ),
+        a: ({ children, href }) => {
+          const safeHref = sanitizeHref(href);
+          if (!safeHref) return <span className="text-slate-400">{children}</span>;
+          return (
+            <a
+              href={safeHref}
+              className="text-blue-400 underline hover:text-blue-300"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {children}
+            </a>
+          );
+        },
         blockquote: ({ children }) => (
           <blockquote className="mb-2 border-l-2 border-slate-600 pl-3 italic text-slate-400 last:mb-0">
             {children}

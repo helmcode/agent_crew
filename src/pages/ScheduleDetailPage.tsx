@@ -5,6 +5,7 @@ import { schedulesApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
 import { cronToHuman } from '../utils/cron';
+import { MarkdownRenderer } from '../components/Markdown';
 
 const runStatusStyles: Record<string, { bg: string; dot: string; pulse: boolean }> = {
   running: { bg: 'bg-blue-500/20 text-blue-400', dot: 'bg-blue-400', pulse: true },
@@ -395,7 +396,7 @@ export function ScheduleDetailPage() {
                     <div className="flex justify-start">
                       <div className="max-w-[80%] rounded-lg rounded-tl-sm bg-slate-800 px-3 py-2">
                         <p className="mb-1 text-[10px] font-medium text-cyan-400">Response</p>
-                        <p className="whitespace-pre-wrap text-sm text-slate-200">{run.response_received}</p>
+                        <div className="text-sm text-slate-200"><MarkdownRenderer>{run.response_received}</MarkdownRenderer></div>
                       </div>
                     </div>
                   )}

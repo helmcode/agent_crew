@@ -137,6 +137,15 @@ export interface UpdateSettingsRequest {
   is_secret: boolean;
 }
 
+// Paginated response
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 // Schedules
 
 export type ScheduleStatus = 'idle' | 'running' | 'error';
@@ -147,7 +156,7 @@ export interface Schedule {
   id: string;
   name: string;
   team_id: string;
-  team_name?: string;
+  team?: { id: string; name: string };
   prompt: string;
   cron_expression: string;
   timezone: string;

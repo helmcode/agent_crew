@@ -60,8 +60,8 @@ export function ScheduleDetailPage() {
   const fetchRuns = useCallback(async () => {
     if (!id) return;
     try {
-      const data = await schedulesApi.runs(id);
-      setRuns(data ?? []);
+      const response = await schedulesApi.runs(id);
+      setRuns(response?.data ?? []);
     } catch {
       // Silently fail for runs — schedule detail is more important
     } finally {
@@ -191,7 +191,7 @@ export function ScheduleDetailPage() {
           </div>
           <div>
             <dt className="text-xs text-slate-500">Team</dt>
-            <dd className="mt-1 text-sm text-white">{schedule.team_name ?? schedule.team_id}</dd>
+            <dd className="mt-1 text-sm text-white">{schedule.team?.name ?? schedule.team_id}</dd>
           </div>
           <div>
             <dt className="text-xs text-slate-500">Enabled</dt>

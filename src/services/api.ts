@@ -14,6 +14,7 @@ import type {
   ScheduleRun,
   CreateScheduleRequest,
   UpdateScheduleRequest,
+  PaginatedResponse,
 } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -161,9 +162,9 @@ export const schedulesApi = {
   delete: (id: string) =>
     request<void>(`/api/schedules/${id}`, { method: 'DELETE' }),
   toggle: (id: string) =>
-    request<Schedule>(`/api/schedules/${id}/toggle`, { method: 'POST' }),
+    request<Schedule>(`/api/schedules/${id}/toggle`, { method: 'PATCH' }),
   runs: (scheduleId: string) =>
-    request<ScheduleRun[]>(`/api/schedules/${scheduleId}/runs`),
+    request<PaginatedResponse<ScheduleRun>>(`/api/schedules/${scheduleId}/runs`),
   getRun: (scheduleId: string, runId: string) =>
     request<ScheduleRun>(`/api/schedules/${scheduleId}/runs/${runId}`),
 };

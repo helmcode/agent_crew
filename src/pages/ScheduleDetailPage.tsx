@@ -69,6 +69,7 @@ export function ScheduleDetailPage() {
   const [togglingEnabled, setTogglingEnabled] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const consecutiveFailures = useRef(0);
   const pollTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -197,6 +198,16 @@ export function ScheduleDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => navigate(`/teams/${schedule.team_id}`)}
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:bg-slate-800"
+            aria-label="Open team chat"
+            title="Open team chat"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+            </svg>
+          </button>
+          <button
             onClick={() => navigate(`/schedules/new?edit=${schedule.id}`)}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:bg-slate-800"
           >
@@ -314,18 +325,37 @@ export function ScheduleDetailPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-700 text-left text-xs text-slate-500">
+                  <th className="w-6 pb-2" />
                   <th className="pb-2 pr-4">Status</th>
                   <th className="pb-2 pr-4">Started</th>
                   <th className="pb-2 pr-4">Duration</th>
-                  <th className="pb-2 pr-4">Error</th>
-                  <th className="pb-2">Actions</th>
+                  <th className="pb-2">Error</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {runs.map((run) => {
                   const style = runStatusStyles[run.status] ?? runStatusStyles.failed;
+                  const isExpanded = expandedRunId === run.id;
+                  const hasConversation = run.prompt_sent || run.response_received;
                   return (
-                    <tr key={run.id} className="hover:bg-slate-800/30">
+                    <tr
+                      key={run.id}
+                      className={`hover:bg-slate-800/30 ${hasConversation ? 'cursor-pointer' : ''}`}
+                      onClick={() => hasConversation && setExpandedRunId(isExpanded ? null : run.id)}
+                    >
+                      <td className="py-2.5 pr-1">
+                        {hasConversation && (
+                          <svg
+                            className={`h-4 w-4 text-slate-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        )}
+                      </td>
                       <td className="py-2.5 pr-4">
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${style.bg}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${style.dot} ${style.pulse ? 'animate-pulse' : ''}`} />
@@ -338,24 +368,40 @@ export function ScheduleDetailPage() {
                       <td className="py-2.5 pr-4 font-mono text-xs text-slate-400">
                         {formatDuration(run.started_at, run.finished_at)}
                       </td>
-                      <td className="max-w-xs truncate py-2.5 pr-4 text-xs text-red-400" title={run.error ? 'Execution failed — see logs for details' : undefined}>
+                      <td className="max-w-xs truncate py-2.5 text-xs text-red-400" title={run.error ? 'Execution failed — see logs for details' : undefined}>
                         {sanitizeRunError(run.error)}
-                      </td>
-                      <td className="py-2.5">
-                        {run.team_deployment_id && (
-                          <button
-                            onClick={() => navigate(`/teams/${run.team_deployment_id}`)}
-                            className="rounded px-2 py-1 text-xs text-blue-400 transition-colors hover:bg-blue-500/10"
-                          >
-                            View
-                          </button>
-                        )}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+
+            {/* Inline conversation for expanded run */}
+            {expandedRunId && (() => {
+              const run = runs.find((r) => r.id === expandedRunId);
+              if (!run || (!run.prompt_sent && !run.response_received)) return null;
+              return (
+                <div className="mt-2 space-y-2 rounded-lg border border-slate-700/50 bg-slate-900/50 p-4">
+                  {run.prompt_sent && (
+                    <div className="flex justify-end">
+                      <div className="max-w-[80%] rounded-lg rounded-tr-sm bg-blue-600/20 px-3 py-2">
+                        <p className="mb-1 text-[10px] font-medium text-blue-400">Prompt</p>
+                        <p className="whitespace-pre-wrap text-sm text-slate-200">{run.prompt_sent}</p>
+                      </div>
+                    </div>
+                  )}
+                  {run.response_received && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%] rounded-lg rounded-tl-sm bg-slate-800 px-3 py-2">
+                        <p className="mb-1 text-[10px] font-medium text-cyan-400">Response</p>
+                        <p className="whitespace-pre-wrap text-sm text-slate-200">{run.response_received}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

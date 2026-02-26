@@ -176,6 +176,8 @@ export interface ScheduleRun {
   finished_at: string | null;
   status: ScheduleRunStatus;
   error: string;
+  prompt_sent?: string;
+  response_received?: string;
 }
 
 export interface CreateScheduleRequest {

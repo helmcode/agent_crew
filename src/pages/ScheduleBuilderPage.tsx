@@ -133,6 +133,18 @@ export function parseFrequencyConfig(cron: string): FrequencyConfig | null {
   return null;
 }
 
+/** Formats a Go duration string (e.g. "1h0m0s") into a human-friendly form (e.g. "1h"). */
+function formatGoDuration(d: string): string {
+  const parts: string[] = [];
+  const h = d.match(/(\d+)h/);
+  const m = d.match(/(\d+)m(?!s)/);
+  const s = d.match(/(\d+)s/);
+  if (h && h[1] !== '0') parts.push(`${h[1]}h`);
+  if (m && m[1] !== '0') parts.push(`${m[1]}m`);
+  if (s && s[1] !== '0') parts.push(`${s[1]}s`);
+  return parts.length > 0 ? parts.join(' ') : d;
+}
+
 function detectTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -168,6 +180,7 @@ export function ScheduleBuilderPage() {
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [loadingSchedule, setLoadingSchedule] = useState(!!editId);
   const [submitting, setSubmitting] = useState(false);
+  const [timeoutValue, setTimeoutValue] = useState<string | null>(null);
 
   // Form fields
   const [name, setName] = useState('');
@@ -216,10 +229,21 @@ export function ScheduleBuilderPage() {
     }
   }, [navigate]);
 
+  // Fetch schedule config (timeout)
+  const fetchConfig = useCallback(async () => {
+    try {
+      const config = await schedulesApi.getConfig();
+      setTimeoutValue(config?.timeout ?? null);
+    } catch {
+      // Non-critical — banner will show generic message
+    }
+  }, []);
+
   useEffect(() => {
     fetchTeams();
+    fetchConfig();
     if (editId) fetchSchedule(editId);
-  }, [fetchTeams, fetchSchedule, editId]);
+  }, [fetchTeams, fetchConfig, fetchSchedule, editId]);
 
   function updateFreq(patch: Partial<FrequencyConfig>) {
     setFreq((prev) => ({ ...prev, ...patch }));
@@ -523,7 +547,10 @@ export function ScheduleBuilderPage() {
             <div>
               <p className="text-sm font-medium text-yellow-400">Execution timeout</p>
               <p className="mt-0.5 text-xs text-yellow-400/70">
-                Scheduled runs have a default timeout. If the team takes longer than expected, the run will be marked as timed out. Make sure your prompt produces work that can complete within the timeout window.
+                {timeoutValue
+                  ? `Scheduled executions have a timeout of ${formatGoDuration(timeoutValue)}. If your task requires more time, contact your administrator.`
+                  : 'Scheduled runs have a default timeout. If the team takes longer than expected, the run will be marked as timed out. Make sure your prompt produces work that can complete within the timeout window.'
+                }
               </p>
             </div>
           </div>

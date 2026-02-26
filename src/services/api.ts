@@ -167,6 +167,8 @@ export const schedulesApi = {
     request<PaginatedResponse<ScheduleRun>>(`/api/schedules/${scheduleId}/runs`),
   getRun: (scheduleId: string, runId: string) =>
     request<ScheduleRun>(`/api/schedules/${scheduleId}/runs/${runId}`),
+  getConfig: () =>
+    request<{ timeout: string }>('/api/schedules/config'),
 };
 
 // Settings

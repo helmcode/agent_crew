@@ -27,7 +27,7 @@ const DAYS = [
   { value: 6, label: 'Sat' },
 ];
 
-const COMMON_TIMEZONES = [
+const BASE_TIMEZONES = [
   'UTC',
   'America/New_York',
   'America/Chicago',
@@ -53,6 +53,11 @@ const COMMON_TIMEZONES = [
   'Australia/Sydney',
   'Pacific/Auckland',
 ];
+
+function buildTimezoneList(detected: string): string[] {
+  if (BASE_TIMEZONES.includes(detected)) return BASE_TIMEZONES;
+  return [detected, ...BASE_TIMEZONES];
+}
 
 function defaultFrequency(): FrequencyConfig {
   return {
@@ -168,10 +173,12 @@ export function ScheduleBuilderPage() {
   const [name, setName] = useState('');
   const [teamId, setTeamId] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [timezone, setTimezone] = useState(detectTimezone);
+  const detectedTz = useMemo(() => detectTimezone(), []);
+  const [timezone, setTimezone] = useState(detectedTz);
   const [enabled, setEnabled] = useState(true);
   const [freq, setFreq] = useState<FrequencyConfig>(defaultFrequency);
 
+  const timezoneOptions = useMemo(() => buildTimezoneList(detectedTz), [detectedTz]);
   const cronExpression = useMemo(() => buildCronExpression(freq), [freq]);
   const humanCron = useMemo(() => cronToHuman(cronExpression), [cronExpression]);
   const currentTimeInZone = useMemo(() => formatCurrentTimeInZone(timezone), [timezone]);
@@ -478,11 +485,11 @@ export function ScheduleBuilderPage() {
             onChange={(e) => setTimezone(e.target.value)}
             className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
           >
-            {COMMON_TIMEZONES.map((tz) => (
-              <option key={tz} value={tz}>{tz}</option>
+            {timezoneOptions.map((tz) => (
+              <option key={tz} value={tz}>{tz}{tz === detectedTz ? ' (detected)' : ''}</option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-slate-500">Auto-detected: {detectTimezone()}</p>
+          <p className="mt-1 text-xs text-slate-500">Auto-detected: {detectedTz}</p>
         </div>
 
         {/* Enabled toggle */}

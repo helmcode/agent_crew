@@ -7,6 +7,7 @@ export const mockTeam: Team = {
   status: 'stopped',
   runtime: 'docker',
   workspace_path: '/tmp/workspace',
+  provider: 'claude',
   agents: [],
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
@@ -17,7 +18,7 @@ export const mockAgent: Agent = {
   team_id: 'team-uuid-1',
   name: 'test-agent',
   role: 'leader',
-  claude_md: '# Leader Agent\n\nYou coordinate the team.',
+  instructions_md: '# Leader Agent\n\nYou coordinate the team.',
   specialty: 'testing',
   system_prompt: 'You are a test agent',
   skills: ['coding', 'testing'],
@@ -37,7 +38,7 @@ export const mockWorkerAgent: Agent = {
   id: 'agent-uuid-worker',
   name: 'worker-agent',
   role: 'worker',
-  claude_md: 'You handle backend tasks.',
+  instructions_md: 'You handle backend tasks.',
   sub_agent_description: 'Handles backend API development and database operations',
   sub_agent_skills: [
     { repo_url: 'https://github.com/anthropic/tools', skill_name: 'read' },
@@ -68,6 +69,7 @@ export const mockK8sTeam: Team = {
   description: 'A Kubernetes-based agent team',
   runtime: 'kubernetes',
   workspace_path: '/workspace',
+  provider: 'claude',
   status: 'running',
   agents: [
     { ...mockAgent, id: 'agent-uuid-3', name: 'k8s-leader', container_status: 'running' },

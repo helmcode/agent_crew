@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { CreateTeamRequest, SkillConfig } from '../types';
+import type { AgentProvider, CreateTeamRequest, SkillConfig } from '../types';
 import { teamsApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
@@ -9,11 +9,31 @@ import { generateId } from '../utils/id';
 interface AgentDraft {
   id: string;
   name: string;
-  claude_md: string;
+  instructions_md: string;
   sub_agent_description: string;
   sub_agent_skills: SkillConfig[];
   sub_agent_model: string;
 }
+
+const CLAUDE_MODELS = [
+  { value: 'inherit', label: 'Inherit (default)' },
+  { value: 'sonnet', label: 'Sonnet' },
+  { value: 'opus', label: 'Opus' },
+  { value: 'haiku', label: 'Haiku' },
+];
+
+const OPENCODE_MODELS = [
+  { value: 'inherit', label: 'Inherit (default)', group: '' },
+  { value: 'anthropic/claude-sonnet-4-20250514', label: 'Claude Sonnet 4', group: 'Anthropic' },
+  { value: 'anthropic/claude-opus-4-20250514', label: 'Claude Opus 4', group: 'Anthropic' },
+  { value: 'anthropic/claude-haiku-3-5-20241022', label: 'Claude Haiku 3.5', group: 'Anthropic' },
+  { value: 'openai/gpt-4o', label: 'GPT-4o', group: 'OpenAI' },
+  { value: 'openai/o3-mini', label: 'o3-mini', group: 'OpenAI' },
+  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', group: 'Google' },
+  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', group: 'Google' },
+  { value: 'ollama/llama3', label: 'Ollama - Llama 3', group: 'Local' },
+  { value: 'lmstudio/default', label: 'LM Studio - Default', group: 'Local' },
+];
 
 const MAX_NAME_LENGTH = 255;
 const MAX_SKILLS_PER_AGENT = 20;
@@ -57,9 +77,10 @@ export function TeamBuilderPage() {
   const [teamName, setTeamName] = useState('');
   const [description, setDescription] = useState('');
   const [workspacePath, setWorkspacePath] = useState('');
+  const [provider, setProvider] = useState<AgentProvider>('claude');
 
   // Step 2: Agents
-  function defaultClaudeMd(name: string): string {
+  function defaultInstructionsMd(name: string): string {
     return `# Agent: ${name || '{name}'}\n\n## Role\nDescribe the leader's role here.\n\n## Instructions\nDescribe the leader's instructions here.\n\n## Team\nList the sub-agents available to you.\n`;
   }
 
@@ -67,7 +88,7 @@ export function TeamBuilderPage() {
     {
       id: generateId(),
       name: '',
-      claude_md: defaultClaudeMd(''),
+      instructions_md: defaultInstructionsMd(''),
       sub_agent_description: '',
       sub_agent_skills: [],
       sub_agent_model: 'inherit',
@@ -82,11 +103,18 @@ export function TeamBuilderPage() {
     setAgents([...agents, {
       id: generateId(),
       name: '',
-      claude_md: '',
+      instructions_md: '',
       sub_agent_description: '',
       sub_agent_skills: [],
       sub_agent_model: 'inherit',
     }]);
+  }
+
+  function handleProviderChange(newProvider: AgentProvider) {
+    if (newProvider === provider) return;
+    setProvider(newProvider);
+    // Reset all agents' models to 'inherit' since models differ between providers
+    setAgents(agents.map((a) => ({ ...a, sub_agent_model: 'inherit' })));
   }
 
   function removeAgent(index: number) {
@@ -178,12 +206,13 @@ export function TeamBuilderPage() {
         name: teamName.trim(),
         description: description.trim() || undefined,
         workspace_path: workspacePath.trim() || undefined,
+        provider,
         agents: agents.map((a, i) => {
           if (i === 0) {
             return {
               name: a.name.trim(),
               role: 'leader' as const,
-              claude_md: a.claude_md.trim() || undefined,
+              instructions_md: a.instructions_md.trim() || undefined,
               sub_agent_skills: a.sub_agent_skills.length > 0 ? a.sub_agent_skills : undefined,
             };
           }
@@ -242,6 +271,44 @@ export function TeamBuilderPage() {
       {/* Step 1 */}
       {step === 1 && (
         <div className="space-y-4">
+          {/* Provider Selector */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-300">Provider *</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div
+                onClick={() => handleProviderChange('claude')}
+                className={`cursor-pointer rounded-lg border-2 p-4 transition-colors ${
+                  provider === 'claude'
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                }`}
+                data-testid="provider-card-claude"
+              >
+                <h4 className={`text-sm font-semibold ${provider === 'claude' ? 'text-blue-400' : 'text-white'}`}>
+                  Claude Code
+                </h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  Anthropic's official AI coding agent. Powered by Claude models.
+                </p>
+              </div>
+              <div
+                onClick={() => handleProviderChange('opencode')}
+                className={`cursor-pointer rounded-lg border-2 p-4 transition-colors ${
+                  provider === 'opencode'
+                    ? 'border-emerald-500 bg-emerald-500/10'
+                    : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                }`}
+                data-testid="provider-card-opencode"
+              >
+                <h4 className={`text-sm font-semibold ${provider === 'opencode' ? 'text-emerald-400' : 'text-white'}`}>
+                  OpenCode
+                </h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  Open-source AI agent supporting 75+ model providers including Anthropic, OpenAI, Google, and local models.
+                </p>
+              </div>
+            </div>
+          </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-300">Team Name *</label>
             <input
@@ -317,20 +384,22 @@ export function TeamBuilderPage() {
               </div>
 
               {i === 0 ? (
-                /* Leader: CLAUDE.md textarea + global skills */
+                /* Leader: instructions textarea + global skills */
                 <div className="mt-3 space-y-3">
                   <div>
-                    <label className="mb-1 block text-xs text-slate-400">CLAUDE.md Content</label>
+                    <label className="mb-1 block text-xs text-slate-400">
+                      {provider === 'claude' ? 'CLAUDE.md Content' : 'AGENTS.md Content'}
+                    </label>
                     <textarea
-                      value={agent.claude_md}
-                      onChange={(e) => updateAgent(i, 'claude_md', e.target.value)}
+                      value={agent.instructions_md}
+                      onChange={(e) => updateAgent(i, 'instructions_md', e.target.value)}
                       onInput={autoGrow}
                       rows={6}
                       className="min-h-[80px] max-h-[400px] w-full resize-none overflow-y-auto rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 font-mono text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                       placeholder="# Agent instructions in Markdown..."
                     />
                     <p className="mt-1 text-xs text-slate-500">
-                      This content will be written to the agent's CLAUDE.md file at deploy time.
+                      This content will be written to the agent's {provider === 'claude' ? 'CLAUDE.md' : 'AGENTS.md'} file at deploy time.
                     </p>
                   </div>
                   <div>
@@ -463,10 +532,28 @@ export function TeamBuilderPage() {
                       onChange={(e) => updateAgent(i, 'sub_agent_model', e.target.value)}
                       className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
                     >
-                      <option value="inherit">Inherit (default)</option>
-                      <option value="sonnet">Sonnet</option>
-                      <option value="opus">Opus</option>
-                      <option value="haiku">Haiku</option>
+                      {provider === 'claude' ? (
+                        CLAUDE_MODELS.map((m) => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="inherit">Inherit (default)</option>
+                          {(() => {
+                            const groups = OPENCODE_MODELS.filter((m) => m.group).reduce<Record<string, typeof OPENCODE_MODELS>>((acc, m) => {
+                              (acc[m.group] ??= []).push(m);
+                              return acc;
+                            }, {});
+                            return Object.entries(groups).map(([group, models]) => (
+                              <optgroup key={group} label={group}>
+                                {models.map((m) => (
+                                  <option key={m.value} value={m.value}>{m.label}</option>
+                                ))}
+                              </optgroup>
+                            ));
+                          })()}
+                        </>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -490,6 +577,16 @@ export function TeamBuilderPage() {
             <dl className="grid grid-cols-2 gap-2 text-sm">
               <dt className="text-slate-500">Name</dt>
               <dd className="text-white">{teamName}</dd>
+              <dt className="text-slate-500">Provider</dt>
+              <dd>
+                <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                  provider === 'claude'
+                    ? 'bg-blue-500/20 text-blue-400'
+                    : 'bg-emerald-500/20 text-emerald-400'
+                }`}>
+                  {provider === 'claude' ? 'Claude Code' : 'OpenCode'}
+                </span>
+              </dd>
               <dt className="text-slate-500">Description</dt>
               <dd className="text-white">{description || '-'}</dd>
               <dt className="text-slate-500">Workspace Path</dt>
@@ -507,9 +604,9 @@ export function TeamBuilderPage() {
                       {i === 0 ? 'leader' : 'sub-agent'}
                     </span>
                   </div>
-                  {i === 0 && agent.claude_md && (
+                  {i === 0 && agent.instructions_md && (
                     <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap rounded bg-slate-800 p-2 font-mono text-xs text-slate-400">
-                      {agent.claude_md}
+                      {agent.instructions_md}
                     </pre>
                   )}
                   {i > 0 && (
@@ -529,12 +626,13 @@ export function TeamBuilderPage() {
                   name: teamName,
                   description: description || undefined,
                   workspace_path: workspacePath || undefined,
+                  provider,
                   agents: agents.map((a, i) => {
                     if (i === 0) {
                       return {
                         name: a.name,
                         role: 'leader',
-                        claude_md: a.claude_md || undefined,
+                        instructions_md: a.instructions_md || undefined,
                         sub_agent_skills: a.sub_agent_skills.length > 0 ? a.sub_agent_skills : undefined,
                       };
                     }

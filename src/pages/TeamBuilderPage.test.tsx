@@ -302,7 +302,9 @@ describe('TeamBuilderPage', () => {
     expect(repoInputs.length).toBe(2); // leader + sub-agent
     const skillInputs = screen.getAllByPlaceholderText('skill-name');
     expect(skillInputs.length).toBe(2); // leader + sub-agent
-    expect(screen.getByText('Inherit (default)')).toBeInTheDocument();
+    // Both leader and sub-agent have model selects with "Inherit (default)"
+    const modelSelects = screen.getAllByDisplayValue('Inherit (default)');
+    expect(modelSelects.length).toBe(2); // leader + sub-agent
 
     // Sub-agent should NOT have CLAUDE.md textarea (only 1 from the leader)
     const claudeTextareas = screen.getAllByPlaceholderText('# Agent instructions in Markdown...');
@@ -390,8 +392,9 @@ describe('TeamBuilderPage', () => {
     await userEvent.type(nameInput, 'edit');
     await userEvent.click(addBtn);
 
-    // Change model to sonnet
-    await userEvent.selectOptions(screen.getByDisplayValue('Inherit (default)'), 'sonnet');
+    // Change model to sonnet on the sub-agent (index 1; index 0 is leader)
+    const modelSelects = screen.getAllByDisplayValue('Inherit (default)');
+    await userEvent.selectOptions(modelSelects[1], 'sonnet');
 
     await userEvent.click(screen.getByText('Next'));
     await userEvent.click(screen.getByText('Create'));
@@ -507,7 +510,9 @@ describe('TeamBuilderPage', () => {
     await userEvent.type(repoInput, 'https://github.com/anthropic/tools');
     await userEvent.type(nameInput, 'write');
     await userEvent.click(addBtn);
-    await userEvent.selectOptions(screen.getByDisplayValue('Inherit (default)'), 'opus');
+    // Select opus on the sub-agent model dropdown (index 1; index 0 is leader)
+    const modelSelectsForPreview = screen.getAllByDisplayValue('Inherit (default)');
+    await userEvent.selectOptions(modelSelectsForPreview[1], 'opus');
 
     await userEvent.click(screen.getByText('Next'));
 
@@ -706,6 +711,102 @@ describe('TeamBuilderPage', () => {
     });
   });
 
+  it('shows model dropdown for leader in step 2', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    // Leader should have a model select (no sub-agents needed)
+    const leaderModelSelect = screen.getByTestId('leader-model-select');
+    expect(leaderModelSelect).toBeInTheDocument();
+
+    // Verify it has Claude models by default
+    const options = leaderModelSelect.querySelectorAll('option');
+    const optionValues = Array.from(options).map((o) => o.value);
+    expect(optionValues).toEqual(['inherit', 'sonnet', 'opus', 'haiku']);
+  });
+
+  it('shows OpenCode model options in leader dropdown when OpenCode provider selected', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    const leaderModelSelect = screen.getByTestId('leader-model-select');
+    expect(leaderModelSelect).toBeInTheDocument();
+
+    // Should contain optgroups for OpenCode
+    const optgroups = leaderModelSelect.querySelectorAll('optgroup');
+    expect(optgroups.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('includes leader sub_agent_model in create payload when non-default', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? 'GET';
+      if (method === 'POST' && url.endsWith('/api/teams')) {
+        return new Response(JSON.stringify(mockTeam), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+
+    // Change leader model to opus
+    const leaderModelSelect = screen.getByTestId('leader-model-select');
+    await userEvent.selectOptions(leaderModelSelect, 'opus');
+
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.endsWith('/api/teams') && call[1]?.method === 'POST';
+      });
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(createCall![1]!.body as string);
+      expect(body.agents[0].role).toBe('leader');
+      expect(body.agents[0].sub_agent_model).toBe('opus');
+    });
+  });
+
+  it('omits leader sub_agent_model from payload when inherit (default)', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? 'GET';
+      if (method === 'POST' && url.endsWith('/api/teams')) {
+        return new Response(JSON.stringify(mockTeam), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+    // Leave model as inherit (default)
+
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.endsWith('/api/teams') && call[1]?.method === 'POST';
+      });
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(createCall![1]!.body as string);
+      expect(body.agents[0].role).toBe('leader');
+      expect(body.agents[0].sub_agent_model).toBeUndefined();
+    });
+  });
+
   it('shows Claude model dropdown with correct options for sub-agents', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
@@ -713,11 +814,13 @@ describe('TeamBuilderPage', () => {
 
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
 
-    const modelSelect = screen.getByDisplayValue('Inherit (default)');
-    expect(modelSelect).toBeInTheDocument();
+    // Both leader (index 0) and sub-agent (index 1) have model selects
+    const modelSelects = screen.getAllByDisplayValue('Inherit (default)');
+    expect(modelSelects.length).toBe(2);
 
-    // Verify all model options for Claude provider (default)
-    const options = modelSelect.querySelectorAll('option');
+    // Verify sub-agent model options for Claude provider (default)
+    const subAgentSelect = modelSelects[1];
+    const options = subAgentSelect.querySelectorAll('option');
     const optionValues = Array.from(options).map((o) => o.value);
     expect(optionValues).toEqual(['inherit', 'sonnet', 'opus', 'haiku']);
   });
@@ -842,6 +945,12 @@ describe('TeamBuilderPage — provider selector', () => {
     expect(screen.getByText('OpenCode')).toBeInTheDocument();
   });
 
+  it('shows updated provider descriptions', () => {
+    renderPage();
+    expect(screen.getByText("Anthropic's official AI agent. Powered by Claude models.")).toBeInTheDocument();
+    expect(screen.getByText('Open-source AI agent. Powered by Anthropic, OpenAI, Google, and local models.')).toBeInTheDocument();
+  });
+
   it('defaults to Claude provider (blue border)', () => {
     renderPage();
     const claudeCard = screen.getByTestId('provider-card-claude');
@@ -871,11 +980,13 @@ describe('TeamBuilderPage — provider selector', () => {
     await userEvent.click(screen.getByText('Next'));
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
 
-    const modelSelect = screen.getByDisplayValue('Inherit (default)');
-    expect(modelSelect).toBeInTheDocument();
+    // Both leader (index 0) and sub-agent (index 1) have model selects
+    const modelSelects = screen.getAllByDisplayValue('Inherit (default)');
+    expect(modelSelects.length).toBe(2);
 
-    // Should contain optgroups
-    const optgroups = modelSelect.querySelectorAll('optgroup');
+    // Verify sub-agent select has optgroups
+    const subAgentSelect = modelSelects[1];
+    const optgroups = subAgentSelect.querySelectorAll('optgroup');
     expect(optgroups.length).toBeGreaterThanOrEqual(4); // Anthropic, OpenAI, Google, Local
   });
 
@@ -885,8 +996,9 @@ describe('TeamBuilderPage — provider selector', () => {
     await userEvent.click(screen.getByText('Next'));
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
 
-    // Select a Claude model
-    await userEvent.selectOptions(screen.getByDisplayValue('Inherit (default)'), 'sonnet');
+    // Select a Claude model on the sub-agent (index 1)
+    const modelSelects = screen.getAllByDisplayValue('Inherit (default)');
+    await userEvent.selectOptions(modelSelects[1], 'sonnet');
     expect((screen.getByDisplayValue('Sonnet') as HTMLSelectElement).value).toBe('sonnet');
 
     // Go back and change provider
@@ -894,9 +1006,9 @@ describe('TeamBuilderPage — provider selector', () => {
     await userEvent.click(screen.getByTestId('provider-card-opencode'));
     await userEvent.click(screen.getByText('Next'));
 
-    // Model should be reset to inherit
-    const modelSelect = screen.getByDisplayValue('Inherit (default)');
-    expect(modelSelect).toBeInTheDocument();
+    // Both models should be reset to inherit
+    const resetSelects = screen.getAllByDisplayValue('Inherit (default)');
+    expect(resetSelects.length).toBe(2); // leader + sub-agent
   });
 
   it('includes provider in create payload', async () => {

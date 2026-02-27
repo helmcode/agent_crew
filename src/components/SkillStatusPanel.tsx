@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import type { Agent, SkillStatus, TaskLog } from '../types';
 import { agentsApi } from '../services/api';
 import { toast } from './Toast';
+import { friendlyError } from '../utils/errors';
 
 /** Strip ANSI escape codes from a string for clean display. */
 function stripAnsi(str: string): string {
@@ -358,6 +359,181 @@ export function SettingsButton({ agents, onClick, disabled }: SettingsButtonProp
 }
 
 // ============================================================
+// InstructionsEditor — edit agent CLAUDE.md instructions
+// ============================================================
+
+interface InstructionsEditorProps {
+  teamId: string;
+  agent: Agent;
+  onDirtyChange: (dirty: boolean) => void;
+}
+
+function InstructionsEditor({ teamId, agent, onDirtyChange }: InstructionsEditorProps) {
+  const [content, setContent] = useState('');
+  const [savedContent, setSavedContent] = useState('');
+  const [filePath, setFilePath] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'save' | 'discard' | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const isDirty = content !== savedContent;
+
+  // Notify parent when dirty state changes
+  useEffect(() => {
+    onDirtyChange(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+
+  // Fetch instructions when agent changes
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setContent('');
+    setSavedContent('');
+    setFilePath('');
+
+    agentsApi
+      .getInstructions(teamId, agent.id)
+      .then((data) => {
+        if (cancelled) return;
+        setContent(data.content);
+        setSavedContent(data.content);
+        setFilePath(data.path);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(friendlyError(err, 'Failed to load instructions.'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, agent.id]);
+
+  async function executeSave() {
+    setConfirmAction(null);
+    setSaving(true);
+    try {
+      await agentsApi.updateInstructions(teamId, agent.id, content);
+      setSavedContent(content);
+      toast('success', `Instructions saved for ${agent.name}`);
+    } catch (err) {
+      toast('error', friendlyError(err, 'Failed to save instructions.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function executeDiscard() {
+    setConfirmAction(null);
+    setContent(savedContent);
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-3" data-testid="instructions-loading">
+        <div className="h-4 w-1/3 animate-pulse rounded bg-slate-700" />
+        <div className="h-32 animate-pulse rounded bg-slate-700/60" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div
+        className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3"
+        data-testid="instructions-error"
+      >
+        <p className="text-sm text-red-400">{error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="instructions-editor">
+      {filePath && (
+        <p className="mb-2 flex-shrink-0 text-xs text-slate-500" data-testid="instructions-path">
+          {filePath}
+        </p>
+      )}
+      <textarea
+        ref={textareaRef}
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        className="min-h-0 w-full flex-1 resize-none overflow-y-auto rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 font-mono text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+        placeholder="# Agent instructions in Markdown..."
+        data-testid="instructions-textarea"
+      />
+      {isDirty && (
+        <div className="mt-3 flex flex-shrink-0 items-center justify-center gap-2" data-testid="instructions-actions">
+          <button
+            onClick={() => setConfirmAction('discard')}
+            disabled={saving}
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+            data-testid="instructions-discard"
+          >
+            Discard
+          </button>
+          <button
+            onClick={() => setConfirmAction('save')}
+            disabled={saving}
+            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+            data-testid="instructions-save"
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation dialog for Save/Discard */}
+      {confirmAction && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50"
+          data-testid="instructions-confirm-dialog"
+        >
+          <div className="w-96 rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-xl">
+            <h4 className="mb-2 text-sm font-semibold text-white">
+              {confirmAction === 'save' ? 'Save Changes' : 'Discard Changes'}
+            </h4>
+            <p className="mb-4 text-sm text-slate-400">
+              {confirmAction === 'save'
+                ? 'The updated instructions will be written to the agent\'s configuration file. Changes will take effect on the agent\'s next turn.'
+                : 'Any unsaved edits will be lost. Are you sure you want to discard your changes?'}
+            </p>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+                data-testid="instructions-confirm-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAction === 'save' ? executeSave : executeDiscard}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium text-white transition-colors ${
+                  confirmAction === 'save'
+                    ? 'bg-blue-600 hover:bg-blue-500'
+                    : 'bg-red-600 hover:bg-red-500'
+                }`}
+                data-testid="instructions-confirm-action"
+              >
+                {confirmAction === 'save' ? 'Save' : 'Discard'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // SettingsModal — modal with sidebar for skills management
 // ============================================================
 
@@ -381,9 +557,13 @@ export function SettingsModal({
   const [skillName, setSkillName] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [installing, setInstalling] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
   const installableAgents = agents.filter((a) => a.role === 'worker' || a.role === 'leader');
+  const leaderAgent = agents.find((a) => a.role === 'leader');
+  const workerAgents = agents.filter((a) => a.role === 'worker');
 
   // Select first installable agent by default when modal opens
   useEffect(() => {
@@ -412,6 +592,49 @@ export function SettingsModal({
       (a.skill_statuses?.filter((s) => s.status === 'installed').length ?? 0),
     0,
   );
+
+  function handleTabSwitch(tabId: string) {
+    if (tabId === activeTab) return;
+    if (isDirty) {
+      setPendingTab(tabId);
+      return;
+    }
+    setActiveTab(tabId);
+  }
+
+  function confirmTabSwitch() {
+    if (pendingTab) {
+      setIsDirty(false);
+      setActiveTab(pendingTab);
+      setPendingTab(null);
+    }
+  }
+
+  function cancelTabSwitch() {
+    setPendingTab(null);
+  }
+
+  function handleModalClose() {
+    if (isDirty) {
+      setPendingTab('__close__');
+      return;
+    }
+    onClose();
+  }
+
+  function confirmClose() {
+    setIsDirty(false);
+    setPendingTab(null);
+    onClose();
+  }
+
+  // Resolve the active agent (if any) from the tab ID
+  const activeAgent = activeTab.startsWith('agent-')
+    ? agents.find((a) => a.id === activeTab.replace('agent-', ''))
+    : null;
+
+  // Content header label
+  const contentHeaderLabel = activeAgent ? activeAgent.name : 'Skills';
 
   async function handleInstallSkill() {
     const trimmedRepo = repoUrl.trim();
@@ -486,16 +709,8 @@ export function SettingsModal({
   }
 
   function handleBackdropClick(e: React.MouseEvent) {
-    if (e.target === backdropRef.current) onClose();
+    if (e.target === backdropRef.current) handleModalClose();
   }
-
-  const sidebarItems = [
-    {
-      id: 'skills',
-      label: 'Skills',
-      badge: totalFailed > 0 ? totalFailed : undefined,
-    },
-  ];
 
   return (
     <div
@@ -510,20 +725,20 @@ export function SettingsModal({
           <div className="border-b border-slate-700 px-4 py-3">
             <h2 className="text-sm font-semibold text-white">Settings</h2>
           </div>
-          <nav className="flex-1 p-2">
-            {sidebarItems.map((item) => (
+          <nav className="flex-1 overflow-y-auto p-2">
+            {/* Agent entries */}
+            {leaderAgent && (
               <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => handleTabSwitch(`agent-${leaderAgent.id}`)}
                 className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  activeTab === item.id
+                  activeTab === `agent-${leaderAgent.id}`
                     ? 'bg-blue-600/20 text-blue-400'
                     : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-300'
                 }`}
-                data-testid={`settings-tab-${item.id}`}
+                data-testid={`settings-tab-agent-${leaderAgent.id}`}
               >
                 <svg
-                  className="h-4 w-4"
+                  className="h-4 w-4 flex-shrink-0"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -532,26 +747,71 @@ export function SettingsModal({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
-                {item.label}
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className="ml-auto rounded-full bg-red-500/20 px-1.5 py-0.5 text-xs text-red-400">
-                    {item.badge}
-                  </span>
-                )}
+                <span className="truncate">{leaderAgent.name}</span>
+              </button>
+            )}
+            {workerAgents.map((worker) => (
+              <button
+                key={worker.id}
+                onClick={() => handleTabSwitch(`agent-${worker.id}`)}
+                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 pl-7 text-sm transition-colors ${
+                  activeTab === `agent-${worker.id}`
+                    ? 'bg-blue-600/20 text-blue-400'
+                    : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-300'
+                }`}
+                data-testid={`settings-tab-agent-${worker.id}`}
+              >
+                <span className="truncate">{worker.name}</span>
               </button>
             ))}
+
+            {/* Separator */}
+            {leaderAgent && (
+              <div className="my-2 border-t border-slate-700" data-testid="settings-sidebar-separator" />
+            )}
+
+            {/* Skills tab */}
+            <button
+              onClick={() => handleTabSwitch('skills')}
+              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                activeTab === 'skills'
+                  ? 'bg-blue-600/20 text-blue-400'
+                  : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-300'
+              }`}
+              data-testid="settings-tab-skills"
+            >
+              <svg
+                className="h-4 w-4 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                />
+              </svg>
+              Skills
+              {totalFailed > 0 && (
+                <span className="ml-auto rounded-full bg-red-500/20 px-1.5 py-0.5 text-xs text-red-400">
+                  {totalFailed}
+                </span>
+              )}
+            </button>
           </nav>
         </div>
 
         {/* Main content */}
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-medium text-white">Skills</h3>
-              {totalSkills > 0 && (
+              <h3 className="text-sm font-medium text-white">{contentHeaderLabel}</h3>
+              {activeTab === 'skills' && totalSkills > 0 && (
                 <span className="text-xs text-slate-500">
                   {totalInstalled}/{totalSkills} installed
                   {totalFailed > 0 && (
@@ -562,9 +822,18 @@ export function SettingsModal({
                   )}
                 </span>
               )}
+              {activeAgent && (
+                <span className={`rounded-full px-2 py-0.5 text-xs ${
+                  activeAgent.role === 'leader'
+                    ? 'bg-blue-500/20 text-blue-400'
+                    : 'bg-teal-500/20 text-teal-400'
+                }`}>
+                  {activeAgent.role}
+                </span>
+              )}
             </div>
             <button
-              onClick={onClose}
+              onClick={handleModalClose}
               className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-700 hover:text-white"
               data-testid="settings-modal-close"
             >
@@ -584,9 +853,9 @@ export function SettingsModal({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex min-h-0 flex-1 flex-col p-4">
             {activeTab === 'skills' && (
-              <div className="space-y-4">
+              <div className="space-y-4 overflow-y-auto">
                 {agentsWithSkills.length > 0 ? (
                   agentsWithSkills.map((agent) => (
                     <div
@@ -714,9 +983,51 @@ export function SettingsModal({
                 )}
               </div>
             )}
+
+            {/* Agent instructions tab */}
+            {activeAgent && (
+              <div className="flex min-h-0 flex-1 flex-col" data-testid={`instructions-panel-${activeAgent.id}`}>
+                <InstructionsEditor
+                  teamId={teamId}
+                  agent={activeAgent}
+                  onDirtyChange={setIsDirty}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Confirmation dialog for unsaved changes */}
+      {pendingTab !== null && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
+          data-testid="unsaved-changes-dialog"
+        >
+          <div className="w-96 rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-xl">
+            <h4 className="mb-2 text-sm font-semibold text-white">Unsaved Changes</h4>
+            <p className="mb-4 text-sm text-slate-400">
+              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+            </p>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={cancelTabSwitch}
+                className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+                data-testid="unsaved-changes-cancel"
+              >
+                Stay
+              </button>
+              <button
+                onClick={pendingTab === '__close__' ? confirmClose : confirmTabSwitch}
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                data-testid="unsaved-changes-confirm"
+              >
+                Discard Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

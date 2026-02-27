@@ -1,6 +1,7 @@
 import type {
   Team,
   Agent,
+  AgentInstructions,
   TaskLog,
   Setting,
   CreateTeamRequest,
@@ -102,6 +103,18 @@ export const agentsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  getInstructions: (teamId: string, agentId: string) =>
+    request<AgentInstructions>(
+      `/api/teams/${encodeURIComponent(teamId)}/agents/${encodeURIComponent(agentId)}/instructions`,
+    ),
+  updateInstructions: (teamId: string, agentId: string, content: string) =>
+    request<void>(
+      `/api/teams/${encodeURIComponent(teamId)}/agents/${encodeURIComponent(agentId)}/instructions`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ content }),
+      },
+    ),
 };
 
 // Chat & Messages

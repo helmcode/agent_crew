@@ -8,6 +8,8 @@ const ERROR_MAP: Record<string, string> = {
   'name is required': 'A name is required.',
   'team not found': 'Team not found. It may have been deleted.',
   'agent not found': 'Agent not found. It may have been removed.',
+  'team is not running': 'The team must be running to read or edit agent instructions.',
+  'agent is not running': 'The agent must be running to read or edit its instructions.',
   'team name already exists': 'A team with that name already exists. Please choose a different name.',
 };
 

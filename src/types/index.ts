@@ -111,6 +111,11 @@ export interface UpdateAgentRequest {
   sub_agent_model?: string;
 }
 
+export interface AgentInstructions {
+  content: string;
+  path: string;
+}
+
 export type ActivityEventType = 'tool_use' | 'assistant' | 'tool_result' | 'error';
 
 export interface ActivityEvent {

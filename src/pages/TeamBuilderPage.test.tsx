@@ -265,16 +265,16 @@ describe('TeamBuilderPage', () => {
     });
   });
 
-  it('shows CLAUDE.md editor for leader in step 2', async () => {
+  it('shows instructions editor for leader in step 2 (Claude provider)', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
 
     expect(screen.getByText('CLAUDE.md Content')).toBeInTheDocument();
-    expect(screen.getByText('This content will be written to the agent\'s CLAUDE.md file at deploy time.')).toBeInTheDocument();
+    expect(screen.getByText("This content will be written to the agent's CLAUDE.md file at deploy time.")).toBeInTheDocument();
   });
 
-  it('pre-populates CLAUDE.md with default template', async () => {
+  it('pre-populates instructions with default template', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
@@ -309,7 +309,7 @@ describe('TeamBuilderPage', () => {
     expect(claudeTextareas).toHaveLength(1);
   });
 
-  it('includes claude_md in create payload for leader', async () => {
+  it('includes instructions_md in create payload for leader', async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       const method = init?.method ?? 'GET';
@@ -326,9 +326,9 @@ describe('TeamBuilderPage', () => {
 
     await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
     // Clear default and type custom content
-    const claudeEditor = screen.getByPlaceholderText('# Agent instructions in Markdown...');
-    await userEvent.clear(claudeEditor);
-    await userEvent.type(claudeEditor, '# Custom instructions');
+    const instructionsEditor = screen.getByPlaceholderText('# Agent instructions in Markdown...');
+    await userEvent.clear(instructionsEditor);
+    await userEvent.type(instructionsEditor, '# Custom instructions');
     await userEvent.click(screen.getByText('Next'));
     await userEvent.click(screen.getByText('Create'));
 
@@ -339,7 +339,7 @@ describe('TeamBuilderPage', () => {
       });
       expect(createCall).toBeTruthy();
       const body = JSON.parse(createCall![1]!.body as string);
-      expect(body.agents[0].claude_md).toBe('# Custom instructions');
+      expect(body.agents[0].instructions_md).toBe('# Custom instructions');
     });
   });
 
@@ -404,12 +404,12 @@ describe('TeamBuilderPage', () => {
       expect(createCall).toBeTruthy();
       const body = JSON.parse(createCall![1]!.body as string);
 
-      // Leader should have claude_md, not sub-agent fields
+      // Leader should have instructions_md, not sub-agent fields
       expect(body.agents[0].role).toBe('leader');
-      expect(body.agents[0]).toHaveProperty('claude_md');
+      expect(body.agents[0]).toHaveProperty('instructions_md');
       expect(body.agents[0]).not.toHaveProperty('sub_agent_description');
 
-      // Worker should have sub-agent fields, not claude_md
+      // Worker should have sub-agent fields, not instructions_md
       expect(body.agents[1].role).toBe('worker');
       expect(body.agents[1].sub_agent_description).toBe('Handles backend API tasks');
       expect(body.agents[1].sub_agent_skills).toEqual([
@@ -418,7 +418,7 @@ describe('TeamBuilderPage', () => {
         { repo_url: 'https://github.com/anthropic/tools', skill_name: 'edit' },
       ]);
       expect(body.agents[1].sub_agent_model).toBe('sonnet');
-      expect(body.agents[1]).not.toHaveProperty('claude_md');
+      expect(body.agents[1]).not.toHaveProperty('instructions_md');
     });
   });
 
@@ -464,7 +464,7 @@ describe('TeamBuilderPage', () => {
     });
   });
 
-  it('shows CLAUDE.md preview in step 3 review for leader', async () => {
+  it('shows instructions preview in step 3 review for leader', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
     await userEvent.click(screen.getByText('Next'));
@@ -526,7 +526,7 @@ describe('TeamBuilderPage', () => {
     expect(preview.textContent).toContain('  - skill_name: write');
   });
 
-  it('shows JSON preview in step 3 with claude_md field', async () => {
+  it('shows JSON preview in step 3 with instructions_md field', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
     await userEvent.click(screen.getByText('Next'));
@@ -534,10 +534,10 @@ describe('TeamBuilderPage', () => {
     await userEvent.click(screen.getByText('Next'));
 
     expect(screen.getByText('JSON Preview')).toBeInTheDocument();
-    // The JSON preview should contain claude_md, not specialty/system_prompt
+    // The JSON preview should contain instructions_md, not specialty/system_prompt
     const pre = screen.getByText(/\"name\": \"my-team\"/);
     expect(pre).toBeInTheDocument();
-    expect(pre.textContent).toContain('claude_md');
+    expect(pre.textContent).toContain('instructions_md');
     expect(pre.textContent).not.toContain('specialty');
     expect(pre.textContent).not.toContain('system_prompt');
   });
@@ -621,7 +621,7 @@ describe('TeamBuilderPage', () => {
     expect(screen.getByText('Review')).toBeInTheDocument();
   });
 
-  it('allows editing CLAUDE.md content', async () => {
+  it('allows editing instructions content', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
@@ -706,7 +706,7 @@ describe('TeamBuilderPage', () => {
     });
   });
 
-  it('shows model dropdown with correct options for sub-agents', async () => {
+  it('shows Claude model dropdown with correct options for sub-agents', async () => {
     renderPage();
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
@@ -716,7 +716,7 @@ describe('TeamBuilderPage', () => {
     const modelSelect = screen.getByDisplayValue('Inherit (default)');
     expect(modelSelect).toBeInTheDocument();
 
-    // Verify all model options
+    // Verify all model options for Claude provider (default)
     const options = modelSelect.querySelectorAll('option');
     const optionValues = Array.from(options).map((o) => o.value);
     expect(optionValues).toEqual(['inherit', 'sonnet', 'opus', 'haiku']);
@@ -830,6 +830,114 @@ describe('TeamBuilderPage — skill interactions', () => {
     await waitFor(() => {
       expect(screen.getByText('enter-skill')).toBeInTheDocument();
     });
+  });
+});
+
+describe('TeamBuilderPage — provider selector', () => {
+  it('renders provider selector cards in step 1', () => {
+    renderPage();
+    expect(screen.getByTestId('provider-card-claude')).toBeInTheDocument();
+    expect(screen.getByTestId('provider-card-opencode')).toBeInTheDocument();
+    expect(screen.getByText('Claude Code')).toBeInTheDocument();
+    expect(screen.getByText('OpenCode')).toBeInTheDocument();
+  });
+
+  it('defaults to Claude provider (blue border)', () => {
+    renderPage();
+    const claudeCard = screen.getByTestId('provider-card-claude');
+    expect(claudeCard.className).toContain('border-blue-500');
+  });
+
+  it('switches to OpenCode provider on click', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    const opencodeCard = screen.getByTestId('provider-card-opencode');
+    expect(opencodeCard.className).toContain('border-emerald-500');
+  });
+
+  it('shows AGENTS.md label for OpenCode provider', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    expect(screen.getByText('AGENTS.md Content')).toBeInTheDocument();
+  });
+
+  it('shows OpenCode model list with optgroups for sub-agents', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+
+    const modelSelect = screen.getByDisplayValue('Inherit (default)');
+    expect(modelSelect).toBeInTheDocument();
+
+    // Should contain optgroups
+    const optgroups = modelSelect.querySelectorAll('optgroup');
+    expect(optgroups.length).toBeGreaterThanOrEqual(4); // Anthropic, OpenAI, Google, Local
+  });
+
+  it('resets agent models to inherit when provider changes', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+
+    // Select a Claude model
+    await userEvent.selectOptions(screen.getByDisplayValue('Inherit (default)'), 'sonnet');
+    expect((screen.getByDisplayValue('Sonnet') as HTMLSelectElement).value).toBe('sonnet');
+
+    // Go back and change provider
+    await userEvent.click(screen.getByText('Back'));
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByText('Next'));
+
+    // Model should be reset to inherit
+    const modelSelect = screen.getByDisplayValue('Inherit (default)');
+    expect(modelSelect).toBeInTheDocument();
+  });
+
+  it('includes provider in create payload', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? 'GET';
+      if (method === 'POST' && url.endsWith('/api/teams')) {
+        return new Response(JSON.stringify(mockTeam), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.endsWith('/api/teams') && call[1]?.method === 'POST';
+      });
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(createCall![1]!.body as string);
+      expect(body.provider).toBe('opencode');
+    });
+  });
+
+  it('shows provider badge in step 3 review', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+    await userEvent.click(screen.getByText('Next'));
+
+    expect(screen.getByText('OpenCode')).toBeInTheDocument();
   });
 });
 

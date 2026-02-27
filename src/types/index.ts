@@ -2,6 +2,8 @@ export type TeamStatus = 'stopped' | 'deploying' | 'running' | 'error';
 
 export type AgentRole = 'leader' | 'worker';
 
+export type AgentProvider = 'claude' | 'opencode';
+
 export type ContainerStatus = 'stopped' | 'running' | 'error';
 
 export type SkillInstallState = 'pending' | 'installed' | 'failed';
@@ -24,6 +26,7 @@ export interface Team {
   status: TeamStatus;
   runtime: string;
   workspace_path: string;
+  provider: AgentProvider;
   agents?: Agent[];
   created_at: string;
   updated_at: string;
@@ -34,7 +37,7 @@ export interface Agent {
   team_id: string;
   name: string;
   role: AgentRole;
-  claude_md: string;
+  instructions_md: string;
   specialty: string;
   system_prompt: string;
   skills: unknown;
@@ -75,6 +78,7 @@ export interface CreateTeamRequest {
   description?: string;
   runtime?: string;
   workspace_path?: string;
+  provider?: AgentProvider;
   agents?: CreateAgentInput[];
 }
 
@@ -82,12 +86,13 @@ export interface UpdateTeamRequest {
   name?: string;
   description?: string;
   workspace_path?: string;
+  provider?: AgentProvider;
 }
 
 export interface CreateAgentInput {
   name: string;
   role?: 'leader' | 'worker';
-  claude_md?: string;
+  instructions_md?: string;
   sub_agent_description?: string;
   sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;
@@ -96,7 +101,7 @@ export interface CreateAgentInput {
 export interface CreateAgentRequest {
   name: string;
   role?: 'leader' | 'worker';
-  claude_md?: string;
+  instructions_md?: string;
   sub_agent_description?: string;
   sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;
@@ -105,7 +110,7 @@ export interface CreateAgentRequest {
 export interface UpdateAgentRequest {
   name?: string;
   role?: 'leader' | 'worker';
-  claude_md?: string;
+  instructions_md?: string;
   sub_agent_description?: string;
   sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;

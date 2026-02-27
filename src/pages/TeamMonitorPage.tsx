@@ -357,6 +357,13 @@ export function TeamMonitorPage() {
         <div className="h-5 w-px bg-slate-700" />
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold text-white">{team.name}</h2>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+            (team.provider ?? 'claude') === 'claude'
+              ? 'bg-blue-500/20 text-blue-400'
+              : 'bg-emerald-500/20 text-emerald-400'
+          }`}>
+            {(team.provider ?? 'claude') === 'claude' ? 'Claude' : 'OpenCode'}
+          </span>
           <StatusBadge status={team.status} />
         </div>
         {team.description && (

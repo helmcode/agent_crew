@@ -126,7 +126,16 @@ export function TeamsListPage() {
             className="group cursor-pointer rounded-lg border border-slate-700/50 bg-slate-800/50 p-5 transition-all hover:border-slate-600 hover:bg-slate-800"
           >
             <div className="mb-3 flex items-start justify-between">
-              <h3 className="text-lg font-semibold text-white">{team.name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-white">{team.name}</h3>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                  (team.provider ?? 'claude') === 'claude'
+                    ? 'bg-blue-500/20 text-blue-400'
+                    : 'bg-emerald-500/20 text-emerald-400'
+                }`}>
+                  {(team.provider ?? 'claude') === 'claude' ? 'Claude' : 'OpenCode'}
+                </span>
+              </div>
               <div className="flex items-center gap-1">
                 <StatusBadge status={team.status} />
                 <div className="relative" ref={menuOpen === team.id ? menuRef : undefined}>

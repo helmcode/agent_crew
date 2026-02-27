@@ -214,6 +214,7 @@ export function TeamBuilderPage() {
               role: 'leader' as const,
               instructions_md: a.instructions_md.trim() || undefined,
               sub_agent_skills: a.sub_agent_skills.length > 0 ? a.sub_agent_skills : undefined,
+              sub_agent_model: a.sub_agent_model !== 'inherit' ? a.sub_agent_model : undefined,
             };
           }
           return {
@@ -288,7 +289,7 @@ export function TeamBuilderPage() {
                   Claude Code
                 </h4>
                 <p className="mt-1 text-xs text-slate-400">
-                  Anthropic's official AI coding agent. Powered by Claude models.
+                  Anthropic's official AI agent. Powered by Claude models.
                 </p>
               </div>
               <div
@@ -304,7 +305,7 @@ export function TeamBuilderPage() {
                   OpenCode
                 </h4>
                 <p className="mt-1 text-xs text-slate-400">
-                  Open-source AI agent supporting 75+ model providers including Anthropic, OpenAI, Google, and local models.
+                  Open-source AI agent. Powered by Anthropic, OpenAI, Google, and local models.
                 </p>
               </div>
             </div>
@@ -401,6 +402,38 @@ export function TeamBuilderPage() {
                     <p className="mt-1 text-xs text-slate-500">
                       This content will be written to the agent's {provider === 'claude' ? 'CLAUDE.md' : 'AGENTS.md'} file at deploy time.
                     </p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">Model</label>
+                    <select
+                      value={agent.sub_agent_model}
+                      onChange={(e) => updateAgent(i, 'sub_agent_model', e.target.value)}
+                      className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+                      data-testid="leader-model-select"
+                    >
+                      {provider === 'claude' ? (
+                        CLAUDE_MODELS.map((m) => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="inherit">Inherit (default)</option>
+                          {(() => {
+                            const groups = OPENCODE_MODELS.filter((m) => m.group).reduce<Record<string, typeof OPENCODE_MODELS>>((acc, m) => {
+                              (acc[m.group] ??= []).push(m);
+                              return acc;
+                            }, {});
+                            return Object.entries(groups).map(([group, models]) => (
+                              <optgroup key={group} label={group}>
+                                {models.map((m) => (
+                                  <option key={m.value} value={m.value}>{m.label}</option>
+                                ))}
+                              </optgroup>
+                            ));
+                          })()}
+                        </>
+                      )}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-slate-400">Global Skills (shared with all agents)</label>
@@ -634,6 +667,7 @@ export function TeamBuilderPage() {
                         role: 'leader',
                         instructions_md: a.instructions_md || undefined,
                         sub_agent_skills: a.sub_agent_skills.length > 0 ? a.sub_agent_skills : undefined,
+                        sub_agent_model: a.sub_agent_model !== 'inherit' ? a.sub_agent_model : undefined,
                       };
                     }
                     return {

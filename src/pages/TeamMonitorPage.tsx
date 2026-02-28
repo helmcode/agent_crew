@@ -461,6 +461,44 @@ export function TeamMonitorPage() {
         </div>
       </div>
 
+      {/* Deploy Error Banner */}
+      {team.status === 'error' && team.status_message && (
+        <div className="flex-shrink-0 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3" data-testid="deploy-error-banner">
+          <div className="flex items-start gap-3">
+            <svg className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-red-400">Deploy Error</h4>
+              <p className="mt-1 text-sm text-red-300/80">{team.status_message}</p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => navigate('/settings')}
+                  className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700"
+                >
+                  Go to Settings
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await teamsApi.deploy(teamId);
+                      fetchTeam();
+                      toast('success', 'Redeploying team...');
+                    } catch (err) {
+                      toast('error', friendlyError(err, 'Failed to redeploy team.'));
+                    }
+                  }}
+                  className="rounded-md bg-red-600/80 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600"
+                  data-testid="redeploy-button"
+                >
+                  Redeploy
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Settings Modal */}
       {team.agents && (
         <SettingsModal

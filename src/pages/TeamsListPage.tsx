@@ -176,6 +176,11 @@ export function TeamsListPage() {
             <p className="mb-4 line-clamp-2 text-sm text-slate-400">
               {team.description || 'No description'}
             </p>
+            {team.status === 'error' && team.status_message && (
+              <p className="mb-4 truncate text-xs text-red-400" data-testid="team-error-hint">
+                {team.status_message}
+              </p>
+            )}
             <div className="mb-4 flex items-center gap-4 text-xs text-slate-500">
               <span>{team.agents?.length ?? 0} agents</span>
               <span className="font-mono">{team.runtime === 'kubernetes' ? '☸️' : '🐳'} {team.runtime}</span>

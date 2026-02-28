@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { TeamsListPage } from './TeamsListPage';
-import { mockTeam, mockRunningTeam, createFetchMock } from '../test/mocks';
+import { mockTeam, mockRunningTeam, mockErrorTeam, createFetchMock } from '../test/mocks';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -144,5 +144,36 @@ describe('TeamsListPage', () => {
     await waitFor(() => {
       expect(screen.queryByText(/Are you sure you want to delete/)).not.toBeInTheDocument();
     });
+  });
+
+  // --- Deploy error hint tests ---
+
+  it('shows error hint on team card when status is error with status_message', async () => {
+    global.fetch = createFetchMock({ '/api/teams': { body: [mockErrorTeam] } });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('error-team')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('team-error-hint')).toBeInTheDocument();
+    expect(screen.getByTestId('team-error-hint').textContent).toContain('no auth configured');
+  });
+
+  it('does not show error hint on running team card', async () => {
+    global.fetch = createFetchMock({ '/api/teams': { body: [mockRunningTeam] } });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('team-error-hint')).not.toBeInTheDocument();
+  });
+
+  it('does not show error hint when status is error but no status_message', async () => {
+    const errorNoMsg = { ...mockTeam, status: 'error' as const };
+    global.fetch = createFetchMock({ '/api/teams': { body: [errorNoMsg] } });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('test-team')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('team-error-hint')).not.toBeInTheDocument();
   });
 });

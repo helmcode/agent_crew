@@ -62,6 +62,17 @@ export const mockRunningTeam: Team = {
   ],
 };
 
+export const mockErrorTeam: Team = {
+  ...mockTeam,
+  id: 'team-uuid-error',
+  name: 'error-team',
+  status: 'error',
+  status_message: 'no auth configured: set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in the Settings page',
+  agents: [
+    { ...mockAgent, container_status: 'error' },
+  ],
+};
+
 export const mockK8sTeam: Team = {
   ...mockTeam,
   id: 'team-uuid-3',

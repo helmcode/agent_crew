@@ -24,6 +24,7 @@ export interface Team {
   name: string;
   description: string;
   status: TeamStatus;
+  status_message?: string;
   runtime: string;
   workspace_path: string;
   provider: AgentProvider;

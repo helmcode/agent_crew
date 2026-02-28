@@ -3,7 +3,7 @@ import { render, screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TeamMonitorPage } from './TeamMonitorPage';
-import { mockRunningTeam, mockTaskLog, mockWorkerAgent, mockActivityEventLog } from '../test/mocks';
+import { mockRunningTeam, mockErrorTeam, mockTaskLog, mockWorkerAgent, mockActivityEventLog } from '../test/mocks';
 
 let wsOnMessage: ((log: unknown) => void) | null = null;
 let wsOnStateChange: ((state: string) => void) | null = null;
@@ -1200,5 +1200,117 @@ describe('TeamMonitorPage', () => {
       (el) => el.textContent?.includes('failed') || el.textContent?.includes('Failed'),
     );
     expect(hasSkillFailureToast).toBe(false);
+  });
+
+  // --- Deploy error banner tests ---
+
+  it('shows deploy error banner when team status is error with status_message', async () => {
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/activity')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/messages')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/api/teams/')) return new Response(JSON.stringify(mockErrorTeam), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('deploy-error-banner')).toBeInTheDocument();
+      expect(screen.getByText('Deploy Error')).toBeInTheDocument();
+      expect(screen.getByText(mockErrorTeam.status_message!)).toBeInTheDocument();
+    });
+  });
+
+  it('does not show deploy error banner when team status is running', async () => {
+    global.fetch = mockFetch();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('deploy-error-banner')).not.toBeInTheDocument();
+  });
+
+  it('does not show deploy error banner when status is error but no status_message', async () => {
+    const errorNoMessage = { ...mockRunningTeam, status: 'error' as const };
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/activity')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/messages')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/api/teams/')) return new Response(JSON.stringify(errorNoMessage), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('running-team')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('deploy-error-banner')).not.toBeInTheDocument();
+  });
+
+  it('navigates to settings when "Go to Settings" is clicked in deploy error banner', async () => {
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/activity')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/messages')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/api/teams/')) return new Response(JSON.stringify(mockErrorTeam), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/teams/team-uuid-2']}>
+        <Routes>
+          <Route path="/teams/:id" element={<TeamMonitorPage />} />
+          <Route path="/settings" element={<div data-testid="settings-page">Settings</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('deploy-error-banner')).toBeInTheDocument();
+    });
+
+    // The banner has its own "Go to Settings" button — find the one inside the banner
+    const banner = screen.getByTestId('deploy-error-banner');
+    const settingsBtn = within(banner).getByText('Go to Settings');
+    await userEvent.click(settingsBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+    });
+  });
+
+  it('calls teamsApi.deploy when "Redeploy" is clicked in deploy error banner', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes('/activity')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/messages')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/deploy') && init?.method === 'POST') return new Response(JSON.stringify({ status: 'deploying' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('/api/teams/')) return new Response(JSON.stringify(mockErrorTeam), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('deploy-error-banner')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByTestId('redeploy-button'));
+
+    await waitFor(() => {
+      const deployCall = fetchMock.mock.calls.find(
+        (call) => {
+          const url = typeof call[0] === 'string' ? call[0] : '';
+          return url.includes('/deploy') && call[1]?.method === 'POST';
+        },
+      );
+      expect(deployCall).toBeTruthy();
+    });
   });
 });

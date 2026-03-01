@@ -481,6 +481,7 @@ export function TeamMonitorPage() {
                 <button
                   onClick={async () => {
                     try {
+                      await teamsApi.stop(teamId);
                       await teamsApi.deploy(teamId);
                       fetchTeam();
                       toast('success', 'Redeploying team...');
@@ -542,15 +543,32 @@ export function TeamMonitorPage() {
                           <span>Error</span>
                         </div>
                         <p className="text-sm text-red-300">{getErrorText(msg)}</p>
-                        <button
-                          onClick={() => navigate('/settings')}
-                          className="mt-2 inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-700"
-                        >
-                          Go to Settings
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            onClick={() => navigate('/settings')}
+                            className="inline-flex items-center gap-1 rounded-md bg-slate-800 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-700"
+                          >
+                            Go to Settings
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await teamsApi.stop(teamId);
+                                await teamsApi.deploy(teamId);
+                                fetchTeam();
+                                toast('success', 'Redeploying team...');
+                              } catch (err) {
+                                toast('error', friendlyError(err, 'Failed to redeploy team.'));
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 rounded-md bg-red-600/80 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-red-600"
+                          >
+                            Redeploy
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <div className={`rounded-lg px-3 py-2 text-sm ${

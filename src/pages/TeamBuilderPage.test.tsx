@@ -735,9 +735,9 @@ describe('TeamBuilderPage', () => {
     const leaderModelSelect = screen.getByTestId('leader-model-select');
     expect(leaderModelSelect).toBeInTheDocument();
 
-    // Should contain optgroups for OpenCode
+    // Should contain optgroups for OpenCode (Anthropic, OpenAI, Google)
     const optgroups = leaderModelSelect.querySelectorAll('optgroup');
-    expect(optgroups.length).toBeGreaterThanOrEqual(4);
+    expect(optgroups.length).toBeGreaterThanOrEqual(3);
   });
 
   it('includes leader sub_agent_model in create payload when non-default', async () => {
@@ -987,7 +987,7 @@ describe('TeamBuilderPage — provider selector', () => {
     // Verify sub-agent select has optgroups
     const subAgentSelect = modelSelects[1];
     const optgroups = subAgentSelect.querySelectorAll('optgroup');
-    expect(optgroups.length).toBeGreaterThanOrEqual(4); // Anthropic, OpenAI, Google, Local
+    expect(optgroups.length).toBeGreaterThanOrEqual(3); // Anthropic, OpenAI, Google
   });
 
   it('resets agent models to inherit when provider changes', async () => {
@@ -1050,6 +1050,71 @@ describe('TeamBuilderPage — provider selector', () => {
     await userEvent.click(screen.getByText('Next'));
 
     expect(screen.getByText('OpenCode')).toBeInTheDocument();
+  });
+});
+
+function mockFetchWithSettings(settingKeys: string[]) {
+  return vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const method = init?.method ?? 'GET';
+
+    if (method === 'GET' && url.endsWith('/api/settings')) {
+      const settings = settingKeys.map((key, i) => ({
+        id: i + 1,
+        key,
+        value: '***',
+        is_secret: true,
+        updated_at: new Date().toISOString(),
+      }));
+      return new Response(JSON.stringify(settings), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (method === 'POST' && url.endsWith('/api/teams')) {
+      return new Response(JSON.stringify(mockTeam), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+  });
+}
+
+describe('TeamBuilderPage — credential warnings', () => {
+  it('shows warning for missing Google credential when using OpenCode', async () => {
+    global.fetch = mockFetchWithSettings(['ANTHROPIC_API_KEY']);
+
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    // Change leader model to a Google model
+    const leaderModelSelect = screen.getByTestId('leader-model-select');
+    await userEvent.selectOptions(leaderModelSelect, 'google/gemini-2.5-pro');
+
+    await waitFor(() => {
+      expect(screen.getByText(/GOOGLE_GENERATIVE_AI_API_KEY/)).toBeInTheDocument();
+    });
+  });
+
+  it('does not show warning when credential is already configured', async () => {
+    global.fetch = mockFetchWithSettings(['ANTHROPIC_API_KEY']);
+
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    // Change leader model to an Anthropic model — key IS configured
+    const leaderModelSelect = screen.getByTestId('leader-model-select');
+    await userEvent.selectOptions(leaderModelSelect, 'anthropic/claude-sonnet-4-6');
+
+    // Wait for settings fetch to resolve
+    await waitFor(() => {
+      expect(screen.queryByText(/ANTHROPIC_API_KEY/)).not.toBeInTheDocument();
+    });
   });
 });
 

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AgentProvider, CreateTeamRequest, SkillConfig } from '../types';
-import { teamsApi } from '../services/api';
+import type { AgentProvider, CreateTeamRequest, SkillConfig, Setting } from '../types';
+import { teamsApi, settingsApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
 import { generateId } from '../utils/id';
@@ -24,16 +24,20 @@ const CLAUDE_MODELS = [
 
 const OPENCODE_MODELS = [
   { value: 'inherit', label: 'Inherit (default)', group: '' },
-  { value: 'anthropic/claude-sonnet-4-20250514', label: 'Claude Sonnet 4', group: 'Anthropic' },
-  { value: 'anthropic/claude-opus-4-20250514', label: 'Claude Opus 4', group: 'Anthropic' },
-  { value: 'anthropic/claude-haiku-3-5-20241022', label: 'Claude Haiku 3.5', group: 'Anthropic' },
-  { value: 'openai/gpt-4o', label: 'GPT-4o', group: 'OpenAI' },
-  { value: 'openai/o3-mini', label: 'o3-mini', group: 'OpenAI' },
+  { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6', group: 'Anthropic' },
+  { value: 'anthropic/claude-opus-4-6', label: 'Claude Opus 4.6', group: 'Anthropic' },
+  { value: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5', group: 'Anthropic' },
+  { value: 'openai/gpt-5.3-codex', label: 'GPT 5.3 Codex', group: 'OpenAI' },
+  { value: 'openai/gpt-5.2', label: 'GPT 5.2', group: 'OpenAI' },
   { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', group: 'Google' },
   { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', group: 'Google' },
-  { value: 'ollama/llama3', label: 'Ollama - Llama 3', group: 'Local' },
-  { value: 'lmstudio/default', label: 'LM Studio - Default', group: 'Local' },
 ];
+
+const MODEL_CREDENTIALS: Record<string, string> = {
+  anthropic: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  google: 'GOOGLE_GENERATIVE_AI_API_KEY',
+};
 
 const MAX_NAME_LENGTH = 255;
 const MAX_SKILLS_PER_AGENT = 20;
@@ -98,6 +102,31 @@ export function TeamBuilderPage() {
   // Transient skill input text per agent (keyed by agent.id)
   const [skillRepoInputs, setSkillRepoInputs] = useState<Record<string, string>>({});
   const [skillNameInputs, setSkillNameInputs] = useState<Record<string, string>>({});
+
+  // Track configured setting keys for credential warnings (OpenCode only).
+  const [configuredKeys, setConfiguredKeys] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (provider !== 'opencode') return;
+    settingsApi.list().then((settings: Setting[]) => {
+      setConfiguredKeys(new Set(settings.map((s) => s.key)));
+    }).catch(() => {});
+  }, [provider]);
+
+  const credentialWarnings = useMemo(() => {
+    if (provider !== 'opencode') return {} as Record<string, string>;
+    const warnings: Record<string, string> = {};
+    agents.forEach((agent) => {
+      const model = agent.sub_agent_model;
+      if (!model || model === 'inherit') return;
+      const prefix = model.split('/')[0];
+      const requiredKey = MODEL_CREDENTIALS[prefix];
+      if (requiredKey && !configuredKeys.has(requiredKey)) {
+        warnings[agent.id] = requiredKey;
+      }
+    });
+    return warnings;
+  }, [provider, agents, configuredKeys]);
 
   function addAgent() {
     setAgents([...agents, {
@@ -434,6 +463,11 @@ export function TeamBuilderPage() {
                         </>
                       )}
                     </select>
+                    {credentialWarnings[agent.id] && (
+                      <p className="mt-1 text-xs text-amber-400">
+                        This model requires {credentialWarnings[agent.id]} to be configured in Settings.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-slate-400">Global Skills (shared with all agents)</label>
@@ -588,6 +622,11 @@ export function TeamBuilderPage() {
                         </>
                       )}
                     </select>
+                    {credentialWarnings[agent.id] && (
+                      <p className="mt-1 text-xs text-amber-400">
+                        This model requires {credentialWarnings[agent.id]} to be configured in Settings.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

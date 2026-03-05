@@ -6,6 +6,7 @@ import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
 import { cronToHuman } from '../utils/cron';
 import { MarkdownRenderer } from '../components/Markdown';
+import { PostActionBindingsSection } from '../components/PostActionBindingsSection';
 
 const runStatusStyles: Record<string, { bg: string; dot: string; pulse: boolean }> = {
   running: { bg: 'bg-blue-500/20 text-blue-400', dot: 'bg-blue-400', pulse: true },
@@ -301,6 +302,9 @@ export function ScheduleDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Post-Actions */}
+      <PostActionBindingsSection triggerType="schedule" triggerId={schedule.id} />
 
       {/* Run History */}
       <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-5">

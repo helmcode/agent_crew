@@ -5,6 +5,7 @@ import { webhooksApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
 import { MarkdownRenderer } from '../components/Markdown';
+import { PostActionBindingsSection } from '../components/PostActionBindingsSection';
 
 const runStatusStyles: Record<string, { bg: string; dot: string; pulse: boolean }> = {
   running: { bg: 'bg-blue-500/20 text-blue-400', dot: 'bg-blue-400', pulse: true },
@@ -348,6 +349,9 @@ export function WebhookDetailPage() {
           {webhook.prompt_template}
         </pre>
       </div>
+
+      {/* Post-Actions */}
+      <PostActionBindingsSection triggerType="webhook" triggerId={webhook.id} />
 
       {/* Run History */}
       <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-5">

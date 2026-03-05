@@ -23,6 +23,13 @@ import type {
   PaginatedResponse,
   McpConfigResponse,
   McpServerConfig,
+  PostAction,
+  PostActionBinding,
+  PostActionRun,
+  CreatePostActionRequest,
+  UpdatePostActionRequest,
+  CreateBindingRequest,
+  UpdateBindingRequest,
 } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -205,6 +212,8 @@ export const schedulesApi = {
     request<ScheduleRun>(`/api/schedules/${scheduleId}/runs/${runId}`),
   getConfig: () =>
     request<{ timeout: string }>('/api/schedules/config'),
+  postActions: (id: string) =>
+    request<PostActionBinding[]>(`/api/schedules/${id}/post-actions`),
 };
 
 // Webhooks
@@ -231,6 +240,44 @@ export const webhooksApi = {
     request<PaginatedResponse<WebhookRun>>(`/api/webhooks/${webhookId}/runs`),
   getRun: (webhookId: string, runId: string) =>
     request<WebhookRun>(`/api/webhooks/${webhookId}/runs/${runId}`),
+  postActions: (id: string) =>
+    request<PostActionBinding[]>(`/api/webhooks/${id}/post-actions`),
+};
+
+// Post-Actions
+export const postActionsApi = {
+  list: () => request<PostAction[]>('/api/post-actions'),
+  get: (id: string) => request<PostAction>(`/api/post-actions/${id}`),
+  create: (data: CreatePostActionRequest) =>
+    request<PostAction>('/api/post-actions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: UpdatePostActionRequest) =>
+    request<PostAction>(`/api/post-actions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request<void>(`/api/post-actions/${id}`, { method: 'DELETE' }),
+
+  // Bindings
+  createBinding: (id: string, data: CreateBindingRequest) =>
+    request<PostActionBinding>(`/api/post-actions/${id}/bindings`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateBinding: (id: string, bid: string, data: UpdateBindingRequest) =>
+    request<PostActionBinding>(`/api/post-actions/${id}/bindings/${bid}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteBinding: (id: string, bid: string) =>
+    request<void>(`/api/post-actions/${id}/bindings/${bid}`, { method: 'DELETE' }),
+
+  // Runs
+  runs: (id: string) =>
+    request<PaginatedResponse<PostActionRun>>(`/api/post-actions/${id}/runs`),
 };
 
 // Settings

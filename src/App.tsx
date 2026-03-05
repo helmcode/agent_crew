@@ -11,6 +11,9 @@ import { SettingsPage } from './pages/SettingsPage';
 import { WebhooksListPage } from './pages/WebhooksListPage';
 import { WebhookBuilderPage } from './pages/WebhookBuilderPage';
 import { WebhookDetailPage } from './pages/WebhookDetailPage';
+import { PostActionsListPage } from './pages/PostActionsListPage';
+import { PostActionBuilderPage } from './pages/PostActionBuilderPage';
+import { PostActionDetailPage } from './pages/PostActionDetailPage';
 
 export default function App() {
   return (
@@ -26,6 +29,9 @@ export default function App() {
           <Route path="/webhooks" element={<WebhooksListPage />} />
           <Route path="/webhooks/new" element={<WebhookBuilderPage />} />
           <Route path="/webhooks/:id" element={<WebhookDetailPage />} />
+          <Route path="/post-actions" element={<PostActionsListPage />} />
+          <Route path="/post-actions/new" element={<PostActionBuilderPage />} />
+          <Route path="/post-actions/:id" element={<PostActionDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>

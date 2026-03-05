@@ -579,6 +579,9 @@ export function SettingsModal({
   const [mcpAdding, setMcpAdding] = useState(false);
   const [mcpRemoving, setMcpRemoving] = useState<string | null>(null);
   const [editingMcpName, setEditingMcpName] = useState<string | null>(null);
+  const [expandedMcpErrors, setExpandedMcpErrors] = useState<Set<string>>(new Set());
+  const [mcpNeedsRedeploy, setMcpNeedsRedeploy] = useState(false);
+  const [redeploying, setRedeploying] = useState(false);
 
   const installableAgents = agents.filter((a) => a.role === 'worker' || a.role === 'leader');
   const leaderAgent = agents.find((a) => a.role === 'leader');
@@ -632,6 +635,7 @@ export function SettingsModal({
       await teamsApi.addMcpServer(teamId, server);
       toast('success', editingMcpName ? `MCP server "${name}" updated` : `MCP server "${name}" added`);
       resetMcpForm();
+      setMcpNeedsRedeploy(true);
       onSkillInstalled(); // triggers team refresh
     } catch (err) {
       toast('error', friendlyError(err, editingMcpName ? 'Failed to update MCP server' : 'Failed to add MCP server'));
@@ -666,6 +670,7 @@ export function SettingsModal({
     try {
       await teamsApi.removeMcpServer(teamId, serverName);
       toast('success', `MCP server "${serverName}" removed`);
+      setMcpNeedsRedeploy(true);
       onSkillInstalled(); // triggers team refresh
     } catch (err) {
       toast('error', friendlyError(err, 'Failed to remove MCP server'));
@@ -696,6 +701,31 @@ export function SettingsModal({
   function removeMcpDraftHeader(key: string) {
     const h = { ...(mcpDraft.headers ?? {}) }; delete h[key];
     setMcpDraft({ ...mcpDraft, headers: h });
+  }
+
+  function toggleMcpError(name: string) {
+    setExpandedMcpErrors((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  async function handleRedeploy() {
+    setRedeploying(true);
+    try {
+      await teamsApi.stop(teamId);
+      await new Promise((r) => setTimeout(r, 1000));
+      await teamsApi.deploy(teamId);
+      setMcpNeedsRedeploy(false);
+      onClose();
+      toast('success', 'Team redeployment started');
+    } catch (err: unknown) {
+      toast('error', `Redeploy failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setRedeploying(false);
+    }
   }
 
   // Select first installable agent by default when modal opens
@@ -951,11 +981,24 @@ export function SettingsModal({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
               </svg>
               MCP Servers
-              {mcpServers.length > 0 && (
-                <span className="ml-auto rounded-full bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400">
-                  {mcpServers.length}
-                </span>
-              )}
+              {(() => {
+                const mcpErrors = mcpStatuses.filter((s) => s.status === 'error' || !!s.error).length;
+                if (mcpErrors > 0) {
+                  return (
+                    <span className="ml-auto rounded-full bg-red-500/20 px-1.5 py-0.5 text-xs text-red-400">
+                      {mcpErrors}
+                    </span>
+                  );
+                }
+                if (mcpServers.length > 0) {
+                  return (
+                    <span className="ml-auto rounded-full bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400">
+                      {mcpServers.length}
+                    </span>
+                  );
+                }
+                return null;
+              })()}
             </button>
           </nav>
         </div>
@@ -1151,47 +1194,100 @@ export function SettingsModal({
 
             {activeTab === 'mcp' && (
               <div className="space-y-4 overflow-y-auto">
+                {/* Redeploy warning banner */}
+                {mcpNeedsRedeploy && teamStatus === 'running' && (
+                  <div className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3" data-testid="mcp-redeploy-banner">
+                    <div className="flex items-center gap-2">
+                      <svg className="h-5 w-5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                      <p className="text-sm text-amber-300">
+                        MCP configuration changed. Redeploy the team to apply changes.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleRedeploy}
+                      disabled={redeploying}
+                      className="ml-3 flex-shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-500 disabled:opacity-50"
+                      data-testid="mcp-redeploy-button"
+                    >
+                      {redeploying ? 'Redeploying...' : 'Redeploy Team'}
+                    </button>
+                  </div>
+                )}
+
                 {/* Current MCP servers status */}
                 {mcpServers.length > 0 ? (
                   <div className="space-y-2">
                     {mcpServers.map((srv) => {
                       const status = mcpStatuses.find((s) => s.name === srv.name);
+                      const isError = status?.status === 'error';
+                      const hasError = (isError || !!status?.error) && !!status?.error;
+                      const isExpanded = expandedMcpErrors.has(srv.name);
                       return (
-                        <div key={srv.name} className="flex items-center justify-between rounded-lg border border-slate-700/50 bg-slate-800/30 px-3 py-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className={`h-2 w-2 rounded-full ${
-                                status?.status === 'error' ? 'bg-red-400' : status?.status === 'configured' ? 'bg-green-400' : 'bg-slate-500'
-                              }`} />
-                              <span className="text-sm font-medium text-white">{srv.name}</span>
-                              <span className={`rounded-full px-2 py-0.5 text-xs ${
-                                srv.transport === 'stdio' ? 'bg-purple-500/20 text-purple-400' : 'bg-cyan-500/20 text-cyan-400'
-                              }`}>{srv.transport}</span>
+                        <div key={srv.name} className={`rounded-lg border ${hasError ? 'border-red-500/30' : 'border-slate-700/50'} bg-slate-800/30 px-3 py-2`} data-testid={`mcp-server-${srv.name}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`h-2 w-2 flex-shrink-0 rounded-full ${
+                                  hasError ? 'bg-red-400' : status?.status === 'configured' ? 'bg-green-400' : 'bg-slate-500'
+                                }`} />
+                                <span className="text-sm font-medium text-white">{srv.name}</span>
+                                <span className={`rounded-full px-2 py-0.5 text-xs ${
+                                  srv.transport === 'stdio' ? 'bg-purple-500/20 text-purple-400' : 'bg-cyan-500/20 text-cyan-400'
+                                }`}>{srv.transport}</span>
+                                <span className={`text-xs ${
+                                  hasError ? 'text-red-400' : status?.status === 'configured' ? 'text-green-400' : 'text-slate-500'
+                                }`}>
+                                  {hasError ? 'Error' : status?.status === 'configured' ? 'Configured' : 'Pending'}
+                                </span>
+                                {hasError && (
+                                  <button
+                                    onClick={() => toggleMcpError(srv.name)}
+                                    className="flex items-center text-xs text-slate-500 hover:text-slate-300"
+                                    data-testid={`mcp-error-toggle-${srv.name}`}
+                                  >
+                                    <svg
+                                      className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                              <p className="mt-0.5 truncate text-xs text-slate-500">
+                                {srv.transport === 'stdio' ? `${srv.command} ${(srv.args ?? []).join(' ')}` : srv.url}
+                              </p>
                             </div>
-                            <p className="mt-0.5 truncate text-xs text-slate-500">
-                              {srv.transport === 'stdio' ? `${srv.command} ${(srv.args ?? []).join(' ')}` : srv.url}
-                            </p>
-                            {status?.error && (
-                              <p className="mt-1 text-xs text-red-400">{status.error}</p>
-                            )}
-                          </div>
-                          <div className="ml-2 flex gap-2">
-                            {teamStatus === 'running' && (
+                            <div className="ml-2 flex gap-2">
+                              {teamStatus === 'running' && (
+                                <button
+                                  onClick={() => startEditMcpServer(srv)}
+                                  className="text-xs text-blue-400 hover:text-blue-300"
+                                >
+                                  Edit
+                                </button>
+                              )}
                               <button
-                                onClick={() => startEditMcpServer(srv)}
-                                className="text-xs text-blue-400 hover:text-blue-300"
+                                onClick={() => handleRemoveMcpServer(srv.name)}
+                                disabled={mcpRemoving === srv.name}
+                                className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
                               >
-                                Edit
+                                {mcpRemoving === srv.name ? 'Removing...' : 'Remove'}
                               </button>
-                            )}
-                            <button
-                              onClick={() => handleRemoveMcpServer(srv.name)}
-                              disabled={mcpRemoving === srv.name}
-                              className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
-                            >
-                              {mcpRemoving === srv.name ? 'Removing...' : 'Remove'}
-                            </button>
+                            </div>
                           </div>
+                          {isExpanded && status?.error && (
+                            <pre
+                              data-testid={`mcp-error-${srv.name}`}
+                              className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-red-500/5 px-2 py-1 text-xs text-red-400"
+                            >
+                              {status.error}
+                            </pre>
+                          )}
                         </div>
                       );
                     })}

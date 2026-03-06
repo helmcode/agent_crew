@@ -4,6 +4,7 @@ import type { Team, CreateWebhookRequest } from '../types';
 import { teamsApi, webhooksApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
+import { copyToClipboard } from '../utils/clipboard';
 
 function extractVariables(template: string): string[] {
   const matches = template.match(/\{\{(\w+)\}\}/g);
@@ -113,7 +114,7 @@ export function WebhookBuilderPage() {
   async function handleCopyToken() {
     if (!createdToken) return;
     try {
-      await navigator.clipboard.writeText(createdToken);
+      await copyToClipboard(createdToken);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {

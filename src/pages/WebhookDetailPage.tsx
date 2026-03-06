@@ -4,6 +4,7 @@ import type { Webhook, WebhookRun } from '../types';
 import { webhooksApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
+import { copyToClipboard } from '../utils/clipboard';
 import { MarkdownRenderer } from '../components/Markdown';
 import { PostActionBindingsSection } from '../components/PostActionBindingsSection';
 
@@ -165,7 +166,7 @@ export function WebhookDetailPage() {
   async function handleCopyToken() {
     if (!newToken) return;
     try {
-      await navigator.clipboard.writeText(newToken);
+      await copyToClipboard(newToken);
       setCopiedToken(true);
       setTimeout(() => setCopiedToken(false), 2000);
     } catch {
@@ -182,7 +183,7 @@ export function WebhookDetailPage() {
 
   async function handleCopyCurl() {
     try {
-      await navigator.clipboard.writeText(getCurlExample());
+      await copyToClipboard(getCurlExample());
       setCopiedCurl(true);
       setTimeout(() => setCopiedCurl(false), 2000);
     } catch {

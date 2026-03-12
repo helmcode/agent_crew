@@ -42,7 +42,7 @@ export function MarkdownRenderer({ children }: MarkdownRendererProps) {
           </pre>
         ),
         code: ({ children }) => (
-          <code className="rounded bg-slate-700/50 px-1 py-0.5 font-mono text-xs">
+          <code className="break-all rounded bg-slate-700/50 px-1 py-0.5 font-mono text-xs">
             {children}
           </code>
         ),

@@ -128,6 +128,7 @@ export function TeamMonitorPage() {
   const activityEndRef = useRef<HTMLDivElement>(null);
   const activityContainerRef = useRef<HTMLDivElement>(null);
   const filterPopoverRef = useRef<HTMLDivElement>(null);
+  const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [activityAutoScroll, setActivityAutoScroll] = useState(true);
   // Track previous message counts to only scroll when NEW messages arrive,
@@ -267,6 +268,13 @@ export function TeamMonitorPage() {
     setActivityAutoScroll(atBottom);
   }
 
+  const autoResizeTextarea = useCallback(() => {
+    const el = chatTextareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
+  }, []);
+
   async function handleSend() {
     if (!chatMessage.trim()) {
       setChatInputError(true);
@@ -289,6 +297,7 @@ export function TeamMonitorPage() {
     };
     setChatMessages((prev) => [...prev, optimistic]);
     setChatMessage('');
+    if (chatTextareaRef.current) chatTextareaRef.current.style.height = 'auto';
     setWaitingForReply(true);
     try {
       await chatApi.send(teamId, { message: text });
@@ -297,6 +306,7 @@ export function TeamMonitorPage() {
       setChatMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       setWaitingForReply(false);
       setChatMessage(text);
+      setTimeout(() => autoResizeTextarea(), 0);
       toast('error', friendlyError(err, 'Failed to send message. Please try again.'));
     } finally {
       setSending(false);
@@ -611,7 +621,7 @@ export function TeamMonitorPage() {
             <div ref={chatEndRef} />
           </div>
           <div className="border-t border-slate-700 p-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-end gap-2">
               {team.agents && team.agents.length > 0 && (
                 <SettingsButton
                   agents={team.agents}
@@ -619,16 +629,25 @@ export function TeamMonitorPage() {
                   disabled={team.status !== 'running'}
                 />
               )}
-              <input
+              <textarea
+                ref={chatTextareaRef}
                 value={chatMessage}
                 onChange={(e) => {
                   setChatMessage(e.target.value);
                   if (chatInputError && e.target.value.trim()) setChatInputError(false);
+                  autoResizeTextarea();
                 }}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                rows={1}
                 placeholder="Send a message..."
                 disabled={team.status !== 'running'}
-                className={`flex-1 rounded-lg border bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none disabled:opacity-50 ${
+                aria-label="Chat message"
+                className={`max-h-[150px] flex-1 resize-none overflow-y-auto rounded-lg border bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none disabled:opacity-50 ${
                   chatInputError
                     ? 'border-red-500 focus:border-red-500'
                     : 'border-slate-600 focus:border-blue-500'

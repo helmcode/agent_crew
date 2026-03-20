@@ -180,6 +180,7 @@ export interface Agent {
   container_id: string;
   container_status: ContainerStatus;
   sub_agent_description?: string;
+  sub_agent_instructions?: string;
   sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;
   created_at: string;
@@ -231,6 +232,7 @@ export interface CreateAgentInput {
   role?: 'leader' | 'worker';
   instructions_md?: string;
   sub_agent_description?: string;
+  sub_agent_instructions?: string;
   sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;
 }
@@ -240,6 +242,7 @@ export interface CreateAgentRequest {
   role?: 'leader' | 'worker';
   instructions_md?: string;
   sub_agent_description?: string;
+  sub_agent_instructions?: string;
   sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;
 }
@@ -249,6 +252,7 @@ export interface UpdateAgentRequest {
   role?: 'leader' | 'worker';
   instructions_md?: string;
   sub_agent_description?: string;
+  sub_agent_instructions?: string;
   sub_agent_skills?: SkillConfig[];
   sub_agent_model?: string;
 }

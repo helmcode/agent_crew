@@ -11,6 +11,7 @@ interface AgentDraft {
   name: string;
   instructions_md: string;
   sub_agent_description: string;
+  sub_agent_instructions: string;
   sub_agent_skills: SkillConfig[];
   sub_agent_model: string;
 }
@@ -69,6 +70,10 @@ function generateSubAgentPreview(agent: AgentDraft): string {
     });
   }
   lines.push('---');
+  if (agent.sub_agent_instructions.trim()) {
+    lines.push('');
+    lines.push(agent.sub_agent_instructions.trim());
+  }
   return lines.join('\n');
 }
 
@@ -95,6 +100,7 @@ export function TeamBuilderPage() {
       name: '',
       instructions_md: defaultInstructionsMd(''),
       sub_agent_description: '',
+      sub_agent_instructions: '',
       sub_agent_skills: [],
       sub_agent_model: 'inherit',
     },
@@ -148,6 +154,7 @@ export function TeamBuilderPage() {
       name: '',
       instructions_md: '',
       sub_agent_description: '',
+      sub_agent_instructions: '',
       sub_agent_skills: [],
       sub_agent_model: 'inherit',
     }]);
@@ -462,6 +469,7 @@ export function TeamBuilderPage() {
             name: a.name.trim(),
             role: 'worker' as const,
             sub_agent_description: a.sub_agent_description.trim() || undefined,
+            sub_agent_instructions: a.sub_agent_instructions.trim() || undefined,
             sub_agent_skills: a.sub_agent_skills.length > 0 ? a.sub_agent_skills : undefined,
             sub_agent_model: a.sub_agent_model !== 'inherit' ? a.sub_agent_model : undefined,
           };
@@ -765,13 +773,23 @@ export function TeamBuilderPage() {
                 <div className="mt-3 space-y-3">
                   <div>
                     <label className="mb-1 block text-xs text-slate-400">Description *</label>
-                    <textarea
+                    <input
+                      type="text"
                       value={agent.sub_agent_description}
                       onChange={(e) => updateAgent(i, 'sub_agent_description', e.target.value)}
+                      className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      placeholder="Short one-liner: what does this sub-agent do?"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400">Instructions</label>
+                    <textarea
+                      value={agent.sub_agent_instructions}
+                      onChange={(e) => updateAgent(i, 'sub_agent_instructions', e.target.value)}
                       onInput={autoGrow}
-                      rows={2}
-                      className="min-h-[80px] max-h-[400px] w-full resize-none overflow-y-auto rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                      placeholder="What does this sub-agent do? The leader uses this to decide when to invoke it."
+                      rows={6}
+                      className="min-h-[120px] max-h-[400px] w-full resize-none overflow-y-auto rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      placeholder="Detailed instructions for the sub-agent (supports Markdown)"
                     />
                   </div>
                   <div>
@@ -1198,6 +1216,7 @@ export function TeamBuilderPage() {
                       name: a.name,
                       role: 'worker',
                       sub_agent_description: a.sub_agent_description || undefined,
+                      sub_agent_instructions: a.sub_agent_instructions.trim() || undefined,
                       sub_agent_skills: a.sub_agent_skills.length > 0 ? a.sub_agent_skills : undefined,
                       sub_agent_model: a.sub_agent_model !== 'inherit' ? a.sub_agent_model : undefined,
                     };

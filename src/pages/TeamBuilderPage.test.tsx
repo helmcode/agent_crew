@@ -296,7 +296,7 @@ describe('TeamBuilderPage', () => {
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
 
     // Sub-agent should show structured fields
-    expect(screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Short one-liner: what does this sub-agent do?')).toBeInTheDocument();
     // Both leader and sub-agent have repo/skill inputs now
     const repoInputs = screen.getAllByPlaceholderText('https://github.com/owner/repo');
     expect(repoInputs.length).toBe(2); // leader + sub-agent
@@ -369,7 +369,7 @@ describe('TeamBuilderPage', () => {
     const allNameInputs = screen.getAllByPlaceholderText('Agent name');
     await userEvent.type(allNameInputs[1], 'worker-1');
     await userEvent.type(
-      screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
+      screen.getByPlaceholderText('Short one-liner: what does this sub-agent do?'),
       'Handles backend API tasks',
     );
     // Use the sub-agent's repo/skill inputs (index 1, leader is index 0)
@@ -447,7 +447,7 @@ describe('TeamBuilderPage', () => {
     const allNameInputs = screen.getAllByPlaceholderText('Agent name');
     await userEvent.type(allNameInputs[1], 'worker-1');
     await userEvent.type(
-      screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
+      screen.getByPlaceholderText('Short one-liner: what does this sub-agent do?'),
       'A sub-agent',
     );
     // Leave model as inherit and permission as default
@@ -494,7 +494,7 @@ describe('TeamBuilderPage', () => {
     const allNameInputs = screen.getAllByPlaceholderText('Agent name');
     await userEvent.type(allNameInputs[1], 'my-worker');
     await userEvent.type(
-      screen.getByPlaceholderText('What does this sub-agent do? The leader uses this to decide when to invoke it.'),
+      screen.getByPlaceholderText('Short one-liner: what does this sub-agent do?'),
       'Builds frontend components',
     );
     // Use sub-agent inputs (index 1, leader is index 0)
@@ -529,6 +529,94 @@ describe('TeamBuilderPage', () => {
     expect(preview.textContent).toContain('  - skill_name: read');
     expect(preview.textContent).toContain('    repo_url: https://github.com/anthropic/tools');
     expect(preview.textContent).toContain('  - skill_name: write');
+  });
+
+  it('shows sub-agent instructions as body after frontmatter in preview', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+
+    const nameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(nameInputs[0], 'leader');
+
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    const allNameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(allNameInputs[1], 'my-worker');
+    await userEvent.type(
+      screen.getByPlaceholderText('Short one-liner: what does this sub-agent do?'),
+      'Runs tests',
+    );
+    await userEvent.type(
+      screen.getByPlaceholderText('Detailed instructions for the sub-agent (supports Markdown)'),
+      'You must run all unit tests before reporting results.',
+    );
+
+    await userEvent.click(screen.getByText('Next'));
+
+    const preview = screen.getByTestId('sub-agent-preview-my-worker');
+    const text = preview.textContent || '';
+    // Instructions should appear as body after the closing ---
+    const lastFrontmatterClose = text.lastIndexOf('---');
+    const instructionsText = text.slice(lastFrontmatterClose + 3);
+    expect(instructionsText).toContain('You must run all unit tests before reporting results.');
+    // Description stays in frontmatter
+    expect(text).toContain('description: Runs tests');
+  });
+
+  it('omits instructions body from preview when instructions is empty', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+
+    const nameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(nameInputs[0], 'leader');
+
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    const allNameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(allNameInputs[1], 'my-worker');
+    await userEvent.type(
+      screen.getByPlaceholderText('Short one-liner: what does this sub-agent do?'),
+      'Runs tests',
+    );
+    // Leave instructions empty
+
+    await userEvent.click(screen.getByText('Next'));
+
+    const preview = screen.getByTestId('sub-agent-preview-my-worker');
+    const text = preview.textContent || '';
+    // Should end with the closing --- (no body content after it)
+    const parts = text.split('---');
+    // frontmatter has opening and closing ---, so parts[2] (after second ---) should be empty or not exist
+    const afterFrontmatter = (parts[2] || '').trim();
+    expect(afterFrontmatter).toBe('');
+  });
+
+  it('includes sub_agent_instructions in JSON preview for workers', async () => {
+    renderPage();
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+
+    const nameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(nameInputs[0], 'leader');
+
+    await userEvent.click(screen.getByText('+ Add Sub-Agent'));
+    const allNameInputs = screen.getAllByPlaceholderText('Agent name');
+    await userEvent.type(allNameInputs[1], 'my-worker');
+    await userEvent.type(
+      screen.getByPlaceholderText('Short one-liner: what does this sub-agent do?'),
+      'Runs tests',
+    );
+    await userEvent.type(
+      screen.getByPlaceholderText('Detailed instructions for the sub-agent (supports Markdown)'),
+      'Run pytest with coverage.',
+    );
+
+    await userEvent.click(screen.getByText('Next'));
+
+    // The JSON preview should contain sub_agent_instructions
+    const pre = screen.getByText(/\"name\": \"my-team\"/);
+    expect(pre.textContent).toContain('sub_agent_instructions');
+    expect(pre.textContent).toContain('Run pytest with coverage.');
   });
 
   it('shows JSON preview in step 3 with instructions_md field', async () => {

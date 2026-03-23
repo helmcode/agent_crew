@@ -47,6 +47,7 @@ import type {
   Invite,
   CreateInviteRequest,
   ResetPasswordResponse,
+  OllamaStatus,
 } from '../types';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from './auth';
 
@@ -435,6 +436,11 @@ export const postActionsApi = {
   // Runs
   runs: (id: string) =>
     request<PaginatedResponse<PostActionRun>>(`/api/post-actions/${id}/runs`),
+};
+
+// Ollama
+export const ollamaApi = {
+  status: () => request<OllamaStatus>('/api/ollama/status'),
 };
 
 // Settings

@@ -1407,3 +1407,115 @@ describe('TeamBuilderPage — model provider selector', () => {
   });
 });
 
+describe('TeamBuilderPage — Ollama model provider', () => {
+  it('shows Ollama card when OpenCode is selected', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    expect(screen.getByTestId('model-provider-card-ollama')).toBeInTheDocument();
+    expect(screen.getByText('Ollama')).toBeInTheDocument();
+    expect(screen.getByText('Local open-source models. No API key required.')).toBeInTheDocument();
+  });
+
+  it('Ollama card has orange styling when selected', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-ollama'));
+    const ollamaCard = screen.getByTestId('model-provider-card-ollama');
+    expect(ollamaCard.className).toContain('border-orange-500');
+    expect(ollamaCard.className).toContain('bg-orange-500/10');
+  });
+
+  it('selecting Ollama shows Ollama models with sizes in dropdown', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-ollama'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    const leaderSelect = screen.getByTestId('leader-model-select');
+    const options = Array.from(leaderSelect.querySelectorAll('option'));
+    const labels = options.map((o) => o.textContent);
+
+    expect(labels).toContain('Inherit (default)');
+    expect(labels).toContain('Devstral (~14 GB)');
+    expect(labels).toContain('Qwen 3 8B (~5 GB)');
+    expect(labels).toContain('Llama 3.3 8B (~5 GB)');
+    expect(labels).toContain('Code Llama 13B (~7 GB)');
+    expect(labels).toContain('Mistral 7B (~4 GB)');
+  });
+
+  it('shows no credential warning when Ollama is selected', async () => {
+    global.fetch = vi.fn(async () =>
+      new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-ollama'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('team-credential-warning')).not.toBeInTheDocument();
+    });
+  });
+
+  it('includes model_provider ollama in create payload', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? 'GET';
+      if (method === 'POST' && url.endsWith('/api/teams')) {
+        return new Response(JSON.stringify(mockTeam), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-ollama'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'ollama-team');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.endsWith('/api/teams') && call[1]?.method === 'POST';
+      });
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(createCall![1]!.body as string);
+      expect(body.provider).toBe('opencode');
+      expect(body.model_provider).toBe('ollama');
+    });
+  });
+
+  it('switching from Ollama to another provider resets models', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-ollama'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    // Select an Ollama model on the leader
+    const leaderSelect = screen.getByTestId('leader-model-select');
+    await userEvent.selectOptions(leaderSelect, 'ollama/devstral');
+    expect((leaderSelect as HTMLSelectElement).value).toBe('ollama/devstral');
+
+    // Go back and switch to Anthropic
+    await userEvent.click(screen.getByText('Back'));
+    await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
+    await userEvent.click(screen.getByText('Next'));
+
+    // Model should be reset to inherit
+    const resetSelect = screen.getByTestId('leader-model-select');
+    expect((resetSelect as HTMLSelectElement).value).toBe('inherit');
+
+    // Ollama models should no longer appear
+    const options = Array.from(resetSelect.querySelectorAll('option'));
+    const labels = options.map((o) => o.textContent);
+    expect(labels).not.toContain('Devstral (~14 GB)');
+    expect(labels).toContain('Claude Sonnet 4.6');
+  });
+});
+

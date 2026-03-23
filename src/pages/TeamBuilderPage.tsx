@@ -25,6 +25,14 @@ const CLAUDE_MODELS = [
   { value: 'haiku', label: 'Haiku' },
 ];
 
+const OLLAMA_MODELS: Array<{value: string; label: string; size: string}> = [
+  { value: 'ollama/devstral', label: 'Devstral', size: '~14 GB' },
+  { value: 'ollama/qwen3:8b', label: 'Qwen 3 8B', size: '~5 GB' },
+  { value: 'ollama/llama3.3:8b', label: 'Llama 3.3 8B', size: '~5 GB' },
+  { value: 'ollama/codellama:13b', label: 'Code Llama 13B', size: '~7 GB' },
+  { value: 'ollama/mistral:7b', label: 'Mistral 7B', size: '~4 GB' },
+];
+
 const OPENCODE_MODELS_BY_PROVIDER: Record<string, Array<{value: string; label: string}>> = {
   anthropic: [
     { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
@@ -39,6 +47,7 @@ const OPENCODE_MODELS_BY_PROVIDER: Record<string, Array<{value: string; label: s
     { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
     { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
   ],
+  ollama: OLLAMA_MODELS.map(m => ({ value: m.value, label: `${m.label} (${m.size})` })),
 };
 
 const MODEL_CREDENTIALS: Record<string, string> = {
@@ -571,7 +580,7 @@ export function TeamBuilderPage() {
           {provider === 'opencode' && (
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-300">Model Provider *</label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div
                   onClick={() => handleModelProviderChange('anthropic')}
                   className={`cursor-pointer rounded-lg border-2 p-4 transition-colors ${
@@ -618,6 +627,22 @@ export function TeamBuilderPage() {
                   </h4>
                   <p className="mt-1 text-xs text-slate-400">
                     Gemini models via Google AI API
+                  </p>
+                </div>
+                <div
+                  onClick={() => handleModelProviderChange('ollama')}
+                  className={`cursor-pointer rounded-lg border-2 p-4 transition-colors ${
+                    modelProvider === 'ollama'
+                      ? 'border-orange-500 bg-orange-500/10'
+                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                  }`}
+                  data-testid="model-provider-card-ollama"
+                >
+                  <h4 className={`text-sm font-semibold ${modelProvider === 'ollama' ? 'text-orange-400' : 'text-white'}`}>
+                    Ollama
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Local open-source models. No API key required.
                   </p>
                 </div>
               </div>

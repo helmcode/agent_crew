@@ -505,3 +505,13 @@ export interface UpdateBindingRequest {
   body_override?: string;
   enabled?: boolean;
 }
+
+// Ollama
+
+export interface OllamaStatus {
+  running: boolean;
+  container_id: string;
+  models_pulled: string[];
+  ref_count: number;
+  gpu_available: boolean;
+}

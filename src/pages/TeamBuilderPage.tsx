@@ -26,11 +26,11 @@ const CLAUDE_MODELS = [
 ];
 
 const OLLAMA_MODELS: Array<{value: string; label: string; size: string}> = [
-  { value: 'ollama/devstral', label: 'Devstral', size: '~14 GB' },
+  { value: 'ollama/qwen3:4b', label: 'Qwen 3 4B', size: '~2.5 GB' },
   { value: 'ollama/qwen3:8b', label: 'Qwen 3 8B', size: '~5 GB' },
-  { value: 'ollama/llama3.3:8b', label: 'Llama 3.3 8B', size: '~5 GB' },
-  { value: 'ollama/codellama:13b', label: 'Code Llama 13B', size: '~7 GB' },
   { value: 'ollama/mistral:7b', label: 'Mistral 7B', size: '~4 GB' },
+  { value: 'ollama/llama3.2:3b', label: 'Llama 3.2 3B', size: '~2 GB' },
+  { value: 'ollama/devstral', label: 'Devstral', size: '~14 GB' },
 ];
 
 const OPENCODE_MODELS_BY_PROVIDER: Record<string, Array<{value: string; label: string}>> = {
@@ -54,7 +54,7 @@ const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
   anthropic: 'anthropic/claude-sonnet-4-6',
   openai: 'openai/gpt-5.3-codex',
   google: 'google/gemini-2.5-pro',
-  ollama: 'ollama/qwen3:8b',
+  ollama: 'ollama/qwen3:4b',
 };
 
 const MODEL_CREDENTIALS: Record<string, string> = {

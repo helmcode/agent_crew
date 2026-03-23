@@ -578,6 +578,8 @@ export function TeamMonitorPage() {
           teamMcpServers={team.mcp_servers}
           teamMcpStatuses={team.mcp_statuses}
           teamAgentImage={team.agent_image}
+          provider={team.provider ?? 'claude'}
+          onAgentsChanged={fetchTeam}
         />
       )}
 

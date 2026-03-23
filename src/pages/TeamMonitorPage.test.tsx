@@ -671,9 +671,10 @@ describe('TeamMonitorPage', () => {
     await userEvent.hover(screen.getByTestId('agent-count-badge'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('agent-tooltip')).toBeInTheDocument();
-      expect(screen.getByText('test-agent')).toBeInTheDocument();
-      expect(screen.getByText('worker-agent')).toBeInTheDocument();
+      const tooltip = screen.getByTestId('agent-tooltip');
+      expect(tooltip).toBeInTheDocument();
+      expect(within(tooltip).getByText('test-agent')).toBeInTheDocument();
+      expect(within(tooltip).getByText('worker-agent')).toBeInTheDocument();
     });
   });
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import type { Agent, SkillStatus, TaskLog, McpServerConfig, McpServerStatus, McpTransport } from '../types';
+import type { Agent, AgentProvider, SkillStatus, TaskLog, McpServerConfig, McpServerStatus, McpTransport } from '../types';
 import { agentsApi, teamsApi } from '../services/api';
+import { SubAgentManager } from './SubAgentManager';
 import { toast } from './Toast';
 import { friendlyError } from '../utils/errors';
 
@@ -547,6 +548,8 @@ interface SettingsModalProps {
   teamMcpServers?: McpServerConfig[];
   teamMcpStatuses?: McpServerStatus[];
   teamAgentImage?: string;
+  provider?: AgentProvider;
+  onAgentsChanged?: () => void;
 }
 
 export function SettingsModal({
@@ -559,6 +562,8 @@ export function SettingsModal({
   teamMcpServers,
   teamMcpStatuses,
   teamAgentImage,
+  provider,
+  onAgentsChanged,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState('skills');
   const [repoUrl, setRepoUrl] = useState('');
@@ -829,7 +834,9 @@ export function SettingsModal({
       ? 'MCP Servers'
       : activeTab === 'agent-image'
         ? 'Agent Image'
-        : 'Skills';
+        : activeTab === 'subagents'
+          ? 'Sub-Agents'
+          : 'Skills';
 
   async function handleInstallSkill() {
     const trimmedRepo = repoUrl.trim();
@@ -1050,6 +1057,27 @@ export function SettingsModal({
                 }
                 return null;
               })()}
+            </button>
+
+            {/* Sub-Agents tab */}
+            <button
+              onClick={() => handleTabSwitch('subagents')}
+              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                activeTab === 'subagents'
+                  ? 'bg-blue-600/20 text-blue-400'
+                  : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-300'
+              }`}
+              data-testid="settings-tab-subagents"
+            >
+              <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Sub-Agents
+              {workerAgents.length > 0 && (
+                <span className="ml-auto rounded-full bg-slate-700 px-1.5 py-0.5 text-xs text-slate-400">
+                  {workerAgents.length}
+                </span>
+              )}
             </button>
           </nav>
         </div>
@@ -1535,6 +1563,15 @@ export function SettingsModal({
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === 'subagents' && (
+              <SubAgentManager
+                teamId={teamId}
+                agents={agents}
+                provider={provider ?? 'claude'}
+                onAgentsChanged={onAgentsChanged ?? onSkillInstalled}
+              />
             )}
           </div>
         </div>

@@ -50,6 +50,13 @@ const OPENCODE_MODELS_BY_PROVIDER: Record<string, Array<{value: string; label: s
   ollama: OLLAMA_MODELS.map(m => ({ value: m.value, label: `${m.label} (${m.size})` })),
 };
 
+const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
+  anthropic: 'anthropic/claude-sonnet-4-6',
+  openai: 'openai/gpt-5.3-codex',
+  google: 'google/gemini-2.5-pro',
+  ollama: 'ollama/qwen3:8b',
+};
+
 const MODEL_CREDENTIALS: Record<string, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
@@ -450,6 +457,10 @@ export function TeamBuilderPage() {
     }
   }
 
+  const inheritLabel = provider === 'opencode' && modelProvider && DEFAULT_MODEL_BY_PROVIDER[modelProvider]
+    ? `Inherit (${DEFAULT_MODEL_BY_PROVIDER[modelProvider].split('/')[1]})`
+    : 'Inherit (default)';
+
   function canProceed(): boolean {
     if (step === 1) return isValidName(teamName) && (provider !== 'opencode' || modelProvider !== '');
     if (step === 2) {
@@ -778,7 +789,7 @@ export function TeamBuilderPage() {
                     >
                       {(provider === 'claude'
                         ? CLAUDE_MODELS
-                        : [{ value: 'inherit', label: 'Inherit (default)' }, ...(OPENCODE_MODELS_BY_PROVIDER[modelProvider] ?? [])]
+                        : [{ value: 'inherit', label: inheritLabel }, ...(OPENCODE_MODELS_BY_PROVIDER[modelProvider] ?? [])]
                       ).map((m) => (
                         <option key={m.value} value={m.value}>{m.label}</option>
                       ))}
@@ -924,7 +935,7 @@ export function TeamBuilderPage() {
                     >
                       {(provider === 'claude'
                         ? CLAUDE_MODELS
-                        : [{ value: 'inherit', label: 'Inherit (default)' }, ...(OPENCODE_MODELS_BY_PROVIDER[modelProvider] ?? [])]
+                        : [{ value: 'inherit', label: inheritLabel }, ...(OPENCODE_MODELS_BY_PROVIDER[modelProvider] ?? [])]
                       ).map((m) => (
                         <option key={m.value} value={m.value}>{m.label}</option>
                       ))}

@@ -1100,7 +1100,7 @@ describe('TeamBuilderPage — provider selector', () => {
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
 
     // Both leader (index 0) and sub-agent (index 1) have model selects
-    const modelSelects = screen.getAllByDisplayValue('Inherit (default)');
+    const modelSelects = screen.getAllByDisplayValue('Inherit (gpt-5.3-codex)');
     expect(modelSelects.length).toBe(2);
 
     // Verify sub-agent select has OpenAI models only
@@ -1131,8 +1131,8 @@ describe('TeamBuilderPage — provider selector', () => {
     await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
     await userEvent.click(screen.getByText('Next'));
 
-    // Both models should be reset to inherit
-    const resetSelects = screen.getAllByDisplayValue('Inherit (default)');
+    // Both models should be reset to inherit — label shows the default model for the selected provider
+    const resetSelects = screen.getAllByDisplayValue('Inherit (claude-sonnet-4-6)');
     expect(resetSelects.length).toBe(2); // leader + sub-agent
   });
 
@@ -1436,7 +1436,7 @@ describe('TeamBuilderPage — Ollama model provider', () => {
     const options = Array.from(leaderSelect.querySelectorAll('option'));
     const labels = options.map((o) => o.textContent);
 
-    expect(labels).toContain('Inherit (default)');
+    expect(labels).toContain('Inherit (qwen3:8b)');
     expect(labels).toContain('Devstral (~14 GB)');
     expect(labels).toContain('Qwen 3 8B (~5 GB)');
     expect(labels).toContain('Llama 3.3 8B (~5 GB)');

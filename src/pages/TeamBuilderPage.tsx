@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AgentProvider, CreateTeamRequest, SkillConfig, Setting, McpServerConfig, McpTransport } from '../types';
+import type { AgentProvider, ModelProvider, CreateTeamRequest, SkillConfig, Setting, McpServerConfig, McpTransport } from '../types';
 import { teamsApi, settingsApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
@@ -25,16 +25,21 @@ const CLAUDE_MODELS = [
   { value: 'haiku', label: 'Haiku' },
 ];
 
-const OPENCODE_MODELS = [
-  { value: 'inherit', label: 'Inherit (default)', group: '' },
-  { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6', group: 'Anthropic' },
-  { value: 'anthropic/claude-opus-4-6', label: 'Claude Opus 4.6', group: 'Anthropic' },
-  { value: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5', group: 'Anthropic' },
-  { value: 'openai/gpt-5.3-codex', label: 'GPT 5.3 Codex', group: 'OpenAI' },
-  { value: 'openai/gpt-5.2', label: 'GPT 5.2', group: 'OpenAI' },
-  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', group: 'Google' },
-  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', group: 'Google' },
-];
+const OPENCODE_MODELS_BY_PROVIDER: Record<string, Array<{value: string; label: string}>> = {
+  anthropic: [
+    { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+    { value: 'anthropic/claude-opus-4-6', label: 'Claude Opus 4.6' },
+    { value: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+  ],
+  openai: [
+    { value: 'openai/gpt-5.3-codex', label: 'GPT 5.3 Codex' },
+    { value: 'openai/gpt-5.2', label: 'GPT 5.2' },
+  ],
+  google: [
+    { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+  ],
+};
 
 const MODEL_CREDENTIALS: Record<string, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
@@ -90,6 +95,7 @@ export function TeamBuilderPage() {
   const [workspacePath, setWorkspacePath] = useState('');
   const [provider, setProvider] = useState<AgentProvider>('claude');
   const [agentImage, setAgentImage] = useState('');
+  const [modelProvider, setModelProvider] = useState<ModelProvider>('');
 
   // Step 2: Agents
   function defaultInstructionsMd(name: string): string {
@@ -135,20 +141,12 @@ export function TeamBuilderPage() {
     }).catch(() => {});
   }, [provider]);
 
-  const credentialWarnings = useMemo(() => {
-    if (provider !== 'opencode') return {} as Record<string, string>;
-    const warnings: Record<string, string> = {};
-    agents.forEach((agent) => {
-      const model = agent.sub_agent_model;
-      if (!model || model === 'inherit') return;
-      const prefix = model.split('/')[0];
-      const requiredKey = MODEL_CREDENTIALS[prefix];
-      if (requiredKey && !configuredKeys.has(requiredKey)) {
-        warnings[agent.id] = requiredKey;
-      }
-    });
-    return warnings;
-  }, [provider, agents, configuredKeys]);
+  const teamCredentialWarning = useMemo(() => {
+    if (provider !== 'opencode' || !modelProvider) return null;
+    const requiredKey = MODEL_CREDENTIALS[modelProvider];
+    if (requiredKey && !configuredKeys.has(requiredKey)) return requiredKey;
+    return null;
+  }, [provider, modelProvider, configuredKeys]);
 
   function addAgent() {
     setAgents([...agents, {
@@ -165,7 +163,15 @@ export function TeamBuilderPage() {
   function handleProviderChange(newProvider: AgentProvider) {
     if (newProvider === provider) return;
     setProvider(newProvider);
+    setModelProvider('');
     // Reset all agents' models to 'inherit' since models differ between providers
+    setAgents(agents.map((a) => ({ ...a, sub_agent_model: 'inherit' })));
+  }
+
+  function handleModelProviderChange(newModelProvider: ModelProvider) {
+    if (newModelProvider === modelProvider) return;
+    setModelProvider(newModelProvider);
+    // Reset all agents' models to 'inherit' since available models change
     setAgents(agents.map((a) => ({ ...a, sub_agent_model: 'inherit' })));
   }
 
@@ -436,7 +442,7 @@ export function TeamBuilderPage() {
   }
 
   function canProceed(): boolean {
-    if (step === 1) return isValidName(teamName);
+    if (step === 1) return isValidName(teamName) && (provider !== 'opencode' || modelProvider !== '');
     if (step === 2) {
       return agents.length > 0 && agents.every((a, i) => {
         if (!isValidName(a.name)) return false;
@@ -455,6 +461,7 @@ export function TeamBuilderPage() {
         description: description.trim() || undefined,
         workspace_path: workspacePath.trim() || undefined,
         provider,
+        model_provider: modelProvider || undefined,
         agent_image: agentImage.trim() || undefined,
         mcp_servers: mcpServers.length > 0 ? mcpServers : undefined,
         agents: agents.map((a, i) => {
@@ -561,6 +568,66 @@ export function TeamBuilderPage() {
               </div>
             </div>
           </div>
+          {provider === 'opencode' && (
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-300">Model Provider *</label>
+              <div className="grid grid-cols-3 gap-3">
+                <div
+                  onClick={() => handleModelProviderChange('anthropic')}
+                  className={`cursor-pointer rounded-lg border-2 p-4 transition-colors ${
+                    modelProvider === 'anthropic'
+                      ? 'border-blue-500 bg-blue-500/10'
+                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                  }`}
+                  data-testid="model-provider-card-anthropic"
+                >
+                  <h4 className={`text-sm font-semibold ${modelProvider === 'anthropic' ? 'text-blue-400' : 'text-white'}`}>
+                    Anthropic
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Claude models via Anthropic API
+                  </p>
+                </div>
+                <div
+                  onClick={() => handleModelProviderChange('openai')}
+                  className={`cursor-pointer rounded-lg border-2 p-4 transition-colors ${
+                    modelProvider === 'openai'
+                      ? 'border-green-500 bg-green-500/10'
+                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                  }`}
+                  data-testid="model-provider-card-openai"
+                >
+                  <h4 className={`text-sm font-semibold ${modelProvider === 'openai' ? 'text-green-400' : 'text-white'}`}>
+                    OpenAI
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-400">
+                    GPT models via OpenAI API
+                  </p>
+                </div>
+                <div
+                  onClick={() => handleModelProviderChange('google')}
+                  className={`cursor-pointer rounded-lg border-2 p-4 transition-colors ${
+                    modelProvider === 'google'
+                      ? 'border-yellow-500 bg-yellow-500/10'
+                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                  }`}
+                  data-testid="model-provider-card-google"
+                >
+                  <h4 className={`text-sm font-semibold ${modelProvider === 'google' ? 'text-yellow-400' : 'text-white'}`}>
+                    Google
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Gemini models via Google AI API
+                  </p>
+                </div>
+              </div>
+              {teamCredentialWarning && (
+                <p className="mt-2 text-xs text-amber-400" data-testid="team-credential-warning">
+                  This model provider requires {teamCredentialWarning} to be configured in Settings.
+                </p>
+              )}
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-300">Team Name *</label>
             <input
@@ -684,34 +751,13 @@ export function TeamBuilderPage() {
                       className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
                       data-testid="leader-model-select"
                     >
-                      {provider === 'claude' ? (
-                        CLAUDE_MODELS.map((m) => (
-                          <option key={m.value} value={m.value}>{m.label}</option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="inherit">Inherit (default)</option>
-                          {(() => {
-                            const groups = OPENCODE_MODELS.filter((m) => m.group).reduce<Record<string, typeof OPENCODE_MODELS>>((acc, m) => {
-                              (acc[m.group] ??= []).push(m);
-                              return acc;
-                            }, {});
-                            return Object.entries(groups).map(([group, models]) => (
-                              <optgroup key={group} label={group}>
-                                {models.map((m) => (
-                                  <option key={m.value} value={m.value}>{m.label}</option>
-                                ))}
-                              </optgroup>
-                            ));
-                          })()}
-                        </>
-                      )}
+                      {(provider === 'claude'
+                        ? CLAUDE_MODELS
+                        : [{ value: 'inherit', label: 'Inherit (default)' }, ...(OPENCODE_MODELS_BY_PROVIDER[modelProvider] ?? [])]
+                      ).map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
                     </select>
-                    {credentialWarnings[agent.id] && (
-                      <p className="mt-1 text-xs text-amber-400">
-                        This model requires {credentialWarnings[agent.id]} to be configured in Settings.
-                      </p>
-                    )}
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-slate-400">Global Skills (shared with all agents)</label>
@@ -851,34 +897,13 @@ export function TeamBuilderPage() {
                       onChange={(e) => updateAgent(i, 'sub_agent_model', e.target.value)}
                       className="w-full rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
                     >
-                      {provider === 'claude' ? (
-                        CLAUDE_MODELS.map((m) => (
-                          <option key={m.value} value={m.value}>{m.label}</option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="inherit">Inherit (default)</option>
-                          {(() => {
-                            const groups = OPENCODE_MODELS.filter((m) => m.group).reduce<Record<string, typeof OPENCODE_MODELS>>((acc, m) => {
-                              (acc[m.group] ??= []).push(m);
-                              return acc;
-                            }, {});
-                            return Object.entries(groups).map(([group, models]) => (
-                              <optgroup key={group} label={group}>
-                                {models.map((m) => (
-                                  <option key={m.value} value={m.value}>{m.label}</option>
-                                ))}
-                              </optgroup>
-                            ));
-                          })()}
-                        </>
-                      )}
+                      {(provider === 'claude'
+                        ? CLAUDE_MODELS
+                        : [{ value: 'inherit', label: 'Inherit (default)' }, ...(OPENCODE_MODELS_BY_PROVIDER[modelProvider] ?? [])]
+                      ).map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
                     </select>
-                    {credentialWarnings[agent.id] && (
-                      <p className="mt-1 text-xs text-amber-400">
-                        This model requires {credentialWarnings[agent.id]} to be configured in Settings.
-                      </p>
-                    )}
                   </div>
                 </div>
               )}
@@ -1136,6 +1161,12 @@ export function TeamBuilderPage() {
                   {provider === 'claude' ? 'Claude Code' : 'OpenCode'}
                 </span>
               </dd>
+              {modelProvider && (
+                <>
+                  <dt className="text-slate-500">Model Provider</dt>
+                  <dd className="text-white capitalize">{modelProvider}</dd>
+                </>
+              )}
               <dt className="text-slate-500">Description</dt>
               <dd className="text-white">{description || '-'}</dd>
               <dt className="text-slate-500">Workspace Path</dt>
@@ -1198,6 +1229,7 @@ export function TeamBuilderPage() {
                   description: description || undefined,
                   workspace_path: workspacePath || undefined,
                   provider,
+                  model_provider: modelProvider || undefined,
                   agent_image: agentImage.trim() || undefined,
                   mcp_servers: mcpServers.length > 0 ? mcpServers : undefined,
                   agents: agents.map((a, i) => {

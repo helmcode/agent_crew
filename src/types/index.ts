@@ -109,6 +109,8 @@ export type AgentRole = 'leader' | 'worker';
 
 export type AgentProvider = 'claude' | 'opencode';
 
+export type ModelProvider = '' | 'anthropic' | 'openai' | 'google' | 'ollama';
+
 export type ContainerStatus = 'stopped' | 'running' | 'error';
 
 export type SkillInstallState = 'pending' | 'installed' | 'failed';
@@ -157,6 +159,7 @@ export interface Team {
   runtime: string;
   workspace_path: string;
   provider: AgentProvider;
+  model_provider?: ModelProvider;
   agent_image?: string;
   mcp_servers?: McpServerConfig[];
   mcp_statuses?: McpServerStatus[];
@@ -213,6 +216,7 @@ export interface CreateTeamRequest {
   runtime?: string;
   workspace_path?: string;
   provider?: AgentProvider;
+  model_provider?: ModelProvider;
   agent_image?: string;
   mcp_servers?: McpServerConfig[];
   agents?: CreateAgentInput[];
@@ -223,6 +227,7 @@ export interface UpdateTeamRequest {
   description?: string;
   workspace_path?: string;
   provider?: AgentProvider;
+  model_provider?: ModelProvider;
   agent_image?: string;
   mcp_servers?: McpServerConfig[];
 }

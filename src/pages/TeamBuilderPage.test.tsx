@@ -839,15 +839,22 @@ describe('TeamBuilderPage', () => {
   it('shows OpenCode model options in leader dropdown when OpenCode provider selected', async () => {
     renderPage();
     await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
 
     const leaderModelSelect = screen.getByTestId('leader-model-select');
     expect(leaderModelSelect).toBeInTheDocument();
 
-    // Should contain optgroups for OpenCode (Anthropic, OpenAI, Google)
-    const optgroups = leaderModelSelect.querySelectorAll('optgroup');
-    expect(optgroups.length).toBeGreaterThanOrEqual(3);
+    // Should contain Anthropic models filtered by model provider
+    const options = leaderModelSelect.querySelectorAll('option');
+    const optionValues = Array.from(options).map((o) => o.value);
+    expect(optionValues).toContain('inherit');
+    expect(optionValues).toContain('anthropic/claude-sonnet-4-6');
+    expect(optionValues).toContain('anthropic/claude-opus-4-6');
+    // Should NOT contain other providers' models
+    expect(optionValues).not.toContain('openai/gpt-5.3-codex');
+    expect(optionValues).not.toContain('google/gemini-2.5-pro');
   });
 
   it('includes leader sub_agent_model in create payload when non-default', async () => {
@@ -1077,15 +1084,17 @@ describe('TeamBuilderPage — provider selector', () => {
   it('shows AGENTS.md label for OpenCode provider', async () => {
     renderPage();
     await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
 
     expect(screen.getByText('AGENTS.md Content')).toBeInTheDocument();
   });
 
-  it('shows OpenCode model list with optgroups for sub-agents', async () => {
+  it('shows filtered OpenCode model list for sub-agents', async () => {
     renderPage();
     await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-openai'));
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
     await userEvent.click(screen.getByText('Next'));
     await userEvent.click(screen.getByText('+ Add Sub-Agent'));
@@ -1094,10 +1103,15 @@ describe('TeamBuilderPage — provider selector', () => {
     const modelSelects = screen.getAllByDisplayValue('Inherit (default)');
     expect(modelSelects.length).toBe(2);
 
-    // Verify sub-agent select has optgroups
+    // Verify sub-agent select has OpenAI models only
     const subAgentSelect = modelSelects[1];
-    const optgroups = subAgentSelect.querySelectorAll('optgroup');
-    expect(optgroups.length).toBeGreaterThanOrEqual(3); // Anthropic, OpenAI, Google
+    const options = subAgentSelect.querySelectorAll('option');
+    const optionValues = Array.from(options).map((o) => o.value);
+    expect(optionValues).toContain('inherit');
+    expect(optionValues).toContain('openai/gpt-5.3-codex');
+    expect(optionValues).toContain('openai/gpt-5.2');
+    expect(optionValues).not.toContain('anthropic/claude-sonnet-4-6');
+    expect(optionValues).not.toContain('google/gemini-2.5-pro');
   });
 
   it('resets agent models to inherit when provider changes', async () => {
@@ -1114,6 +1128,7 @@ describe('TeamBuilderPage — provider selector', () => {
     // Go back and change provider
     await userEvent.click(screen.getByText('Back'));
     await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
     await userEvent.click(screen.getByText('Next'));
 
     // Both models should be reset to inherit
@@ -1134,6 +1149,7 @@ describe('TeamBuilderPage — provider selector', () => {
 
     renderPage();
     await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
     await userEvent.click(screen.getByText('Next'));
     await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
@@ -1154,6 +1170,7 @@ describe('TeamBuilderPage — provider selector', () => {
   it('shows provider badge in step 3 review', async () => {
     renderPage();
     await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
     await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
     await userEvent.click(screen.getByText('Next'));
     await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
@@ -1192,19 +1209,16 @@ function mockFetchWithSettings(settingKeys: string[]) {
 }
 
 describe('TeamBuilderPage — credential warnings', () => {
-  it('shows warning for missing Google credential when using OpenCode', async () => {
+  it('shows team-level warning for missing Google credential when using OpenCode', async () => {
     global.fetch = mockFetchWithSettings(['ANTHROPIC_API_KEY']);
 
     renderPage();
     await userEvent.click(screen.getByTestId('provider-card-opencode'));
-    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
-    await userEvent.click(screen.getByText('Next'));
-
-    // Change leader model to a Google model
-    const leaderModelSelect = screen.getByTestId('leader-model-select');
-    await userEvent.selectOptions(leaderModelSelect, 'google/gemini-2.5-pro');
+    // Select Google model provider — key is NOT configured
+    await userEvent.click(screen.getByTestId('model-provider-card-google'));
 
     await waitFor(() => {
+      expect(screen.getByTestId('team-credential-warning')).toBeInTheDocument();
       expect(screen.getByText(/GOOGLE_GENERATIVE_AI_API_KEY/)).toBeInTheDocument();
     });
   });
@@ -1214,16 +1228,181 @@ describe('TeamBuilderPage — credential warnings', () => {
 
     renderPage();
     await userEvent.click(screen.getByTestId('provider-card-opencode'));
-    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
-    await userEvent.click(screen.getByText('Next'));
-
-    // Change leader model to an Anthropic model — key IS configured
-    const leaderModelSelect = screen.getByTestId('leader-model-select');
-    await userEvent.selectOptions(leaderModelSelect, 'anthropic/claude-sonnet-4-6');
+    // Select Anthropic model provider — key IS configured
+    await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
 
     // Wait for settings fetch to resolve
     await waitFor(() => {
-      expect(screen.queryByText(/ANTHROPIC_API_KEY/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('team-credential-warning')).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('TeamBuilderPage — model provider selector', () => {
+  it('shows model provider cards when OpenCode is selected', async () => {
+    renderPage();
+    // Should NOT show model provider cards for Claude
+    expect(screen.queryByTestId('model-provider-card-anthropic')).not.toBeInTheDocument();
+
+    // Switch to OpenCode
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    expect(screen.getByTestId('model-provider-card-anthropic')).toBeInTheDocument();
+    expect(screen.getByTestId('model-provider-card-openai')).toBeInTheDocument();
+    expect(screen.getByTestId('model-provider-card-google')).toBeInTheDocument();
+  });
+
+  it('hides model provider cards when Claude is selected', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    expect(screen.getByTestId('model-provider-card-anthropic')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId('provider-card-claude'));
+    expect(screen.queryByTestId('model-provider-card-anthropic')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('model-provider-card-openai')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('model-provider-card-google')).not.toBeInTheDocument();
+  });
+
+  it('selecting model provider filters model list', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-google'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    const leaderModelSelect = screen.getByTestId('leader-model-select');
+    const options = leaderModelSelect.querySelectorAll('option');
+    const optionValues = Array.from(options).map((o) => o.value);
+    expect(optionValues).toEqual(['inherit', 'google/gemini-2.5-pro', 'google/gemini-2.5-flash']);
+  });
+
+  it('switching model provider resets agent models', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+    await userEvent.click(screen.getByText('Next'));
+
+    // Select a model on the leader
+    const leaderModelSelect = screen.getByTestId('leader-model-select');
+    await userEvent.selectOptions(leaderModelSelect, 'anthropic/claude-sonnet-4-6');
+    expect((leaderModelSelect as HTMLSelectElement).value).toBe('anthropic/claude-sonnet-4-6');
+
+    // Go back and change model provider
+    await userEvent.click(screen.getByText('Back'));
+    await userEvent.click(screen.getByTestId('model-provider-card-openai'));
+    await userEvent.click(screen.getByText('Next'));
+
+    // Leader model should be reset to inherit
+    const resetSelect = screen.getByTestId('leader-model-select');
+    expect((resetSelect as HTMLSelectElement).value).toBe('inherit');
+  });
+
+  it('switching provider resets model provider', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
+
+    // Verify Anthropic is selected (blue border)
+    const anthropicCard = screen.getByTestId('model-provider-card-anthropic');
+    expect(anthropicCard.className).toContain('border-blue-500');
+
+    // Switch to Claude and back to OpenCode
+    await userEvent.click(screen.getByTestId('provider-card-claude'));
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+
+    // Model provider should be reset — none selected
+    const resetAnthropicCard = screen.getByTestId('model-provider-card-anthropic');
+    expect(resetAnthropicCard.className).not.toContain('border-blue-500');
+    const resetOpenaiCard = screen.getByTestId('model-provider-card-openai');
+    expect(resetOpenaiCard.className).not.toContain('border-green-500');
+  });
+
+  it('blocks step 1 without model provider for OpenCode', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'test');
+
+    // Next should be disabled without model provider
+    expect(screen.getByText('Next')).toBeDisabled();
+
+    // Select a model provider
+    await userEvent.click(screen.getByTestId('model-provider-card-anthropic'));
+
+    // Now Next should be enabled
+    expect(screen.getByText('Next')).not.toBeDisabled();
+  });
+
+  it('payload includes model_provider', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? 'GET';
+      if (method === 'POST' && url.endsWith('/api/teams')) {
+        return new Response(JSON.stringify(mockTeam), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-google'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.endsWith('/api/teams') && call[1]?.method === 'POST';
+      });
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(createCall![1]!.body as string);
+      expect(body.model_provider).toBe('google');
+    });
+  });
+
+  it('shows model provider in step 3 review', async () => {
+    renderPage();
+    await userEvent.click(screen.getByTestId('provider-card-opencode'));
+    await userEvent.click(screen.getByTestId('model-provider-card-openai'));
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+    await userEvent.click(screen.getByText('Next'));
+
+    expect(screen.getByText('Model Provider')).toBeInTheDocument();
+    expect(screen.getByText('openai')).toBeInTheDocument();
+  });
+
+  it('omits model_provider from payload when Claude provider is used', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? 'GET';
+      if (method === 'POST' && url.endsWith('/api/teams')) {
+        return new Response(JSON.stringify(mockTeam), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    global.fetch = fetchMock;
+
+    renderPage();
+    // Claude is default, no model provider needed
+    await userEvent.type(screen.getByPlaceholderText('My Agent Team'), 'my-team');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.type(screen.getByPlaceholderText('Agent name'), 'leader');
+    await userEvent.click(screen.getByText('Next'));
+    await userEvent.click(screen.getByText('Create'));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => {
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        return url.endsWith('/api/teams') && call[1]?.method === 'POST';
+      });
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(createCall![1]!.body as string);
+      expect(body.model_provider).toBeUndefined();
     });
   });
 });

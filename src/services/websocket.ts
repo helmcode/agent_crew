@@ -54,7 +54,7 @@ export function connectAgentLogs(
 }
 
 function createConnection(url: string, options: WebSocketOptions): () => void {
-  const maxRetries = options.maxRetries ?? 10;
+  const maxRetries = options.maxRetries ?? Infinity;
   let retryCount = 0;
   let ws: WebSocket | null = null;
   let closed = false;

@@ -188,8 +188,23 @@ describe('isValidTaskLog validation (indirect)', () => {
 });
 
 describe('retry behavior', () => {
-  it('stops reconnecting after max retries (default 10)', () => {
+  it('retries indefinitely by default', () => {
     connectTeamActivity('team-1', { onMessage: vi.fn() });
+    expect(MockWebSocket.instances).toHaveLength(1);
+
+    // Close 20 times — should keep reconnecting (no limit by default)
+    for (let i = 0; i < 20; i++) {
+      MockWebSocket.instances[MockWebSocket.instances.length - 1].simulateClose();
+      const delay = Math.min(1000 * Math.pow(2, i), 30000);
+      vi.advanceTimersByTime(delay);
+    }
+
+    // Initial + 20 retries = 21 instances
+    expect(MockWebSocket.instances).toHaveLength(21);
+  });
+
+  it('stops reconnecting after max retries when explicitly set', () => {
+    connectTeamActivity('team-1', { onMessage: vi.fn(), maxRetries: 10 });
     expect(MockWebSocket.instances).toHaveLength(1);
 
     // Close without opening (so retryCount is not reset) 10 times

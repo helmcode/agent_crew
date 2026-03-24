@@ -1436,12 +1436,12 @@ describe('TeamBuilderPage — Ollama model provider', () => {
     const options = Array.from(leaderSelect.querySelectorAll('option'));
     const labels = options.map((o) => o.textContent);
 
-    expect(labels).toContain('Inherit (qwen3:8b)');
-    expect(labels).toContain('Devstral (~14 GB)');
+    expect(labels).toContain('Inherit (qwen3:4b)');
+    expect(labels).toContain('Qwen 3 4B (~2.5 GB)');
     expect(labels).toContain('Qwen 3 8B (~5 GB)');
-    expect(labels).toContain('Llama 3.3 8B (~5 GB)');
-    expect(labels).toContain('Code Llama 13B (~7 GB)');
     expect(labels).toContain('Mistral 7B (~4 GB)');
+    expect(labels).toContain('Llama 3.2 3B (~2 GB)');
+    expect(labels).toContain('Devstral (~14 GB)');
   });
 
   it('shows no credential warning when Ollama is selected', async () => {

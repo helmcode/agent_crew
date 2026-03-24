@@ -250,6 +250,40 @@ export function TeamMonitorPage() {
     return disconnect;
   }, [teamId]);
 
+  // Fallback: poll for new chat messages when waiting for a reply.
+  // WebSocket connections can silently drop during long inference times
+  // (e.g. Ollama on CPU can take 8+ minutes). This ensures the response
+  // always appears even if the WebSocket misses it.
+  useEffect(() => {
+    if (!waitingForReply) return;
+    const poll = setInterval(async () => {
+      try {
+        const data = await messagesApi.list(teamId);
+        if (!data || data.length === 0) return;
+        const sorted = [...data].sort(
+          (a: TaskLog, b: TaskLog) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
+        setChatMessages((prev) => {
+          const prevIds = new Set(prev.map((m) => m.id));
+          const newMsgs = sorted.filter((m: TaskLog) => !prevIds.has(m.id));
+          if (newMsgs.length === 0) return prev;
+          return [...prev, ...newMsgs]
+            .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            .slice(-500);
+        });
+        // If the most recent message from the API is a response, the agent replied
+        const lastMsg = sorted[sorted.length - 1];
+        if (lastMsg && lastMsg.message_type !== 'user_message') {
+          setWaitingForReply(false);
+          setLiveActivityEvents([]);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 15000);
+    return () => clearInterval(poll);
+  }, [teamId, waitingForReply]);
+
   // Auto-scroll chat panel when new content appears (messages, activity events, thinking state).
   useEffect(() => {
     if (chatMessages.length > prevChatCountRef.current) {

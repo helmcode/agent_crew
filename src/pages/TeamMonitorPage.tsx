@@ -12,11 +12,6 @@ import { friendlyError } from '../utils/errors';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_FILES = 5;
-const ALLOWED_MIME_PREFIXES = ['text/', 'image/', 'application/pdf'];
-
-function isAllowedMime(type: string): boolean {
-  return ALLOWED_MIME_PREFIXES.some((prefix) => type.startsWith(prefix));
-}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -332,10 +327,6 @@ export function TeamMonitorPage() {
 
     const valid: File[] = [];
     for (const file of selected) {
-      if (!isAllowedMime(file.type)) {
-        toast('error', `File type not allowed: ${file.name}`);
-        continue;
-      }
       if (file.size > MAX_FILE_SIZE) {
         toast('error', `File too large (max 10 MB): ${file.name}`);
         continue;
@@ -718,7 +709,7 @@ export function TeamMonitorPage() {
               ref={fileInputRef}
               type="file"
               multiple
-              accept="text/*,image/*,application/pdf"
+              accept="*/*"
               onChange={handleFileSelect}
               className="hidden"
               data-testid="file-input"

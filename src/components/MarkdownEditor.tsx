@@ -131,6 +131,11 @@ export function MarkdownEditor({
     ],
     editable: !disabled,
     content: htmlFromMarkdown(value),
+    onCreate: ({ editor: ed }) => {
+      const md = markdownFromHtml(ed.getHTML());
+      lastEmitted.current = md;
+      onChange(md);
+    },
     onUpdate: ({ editor: ed }) => {
       if (isSyncing.current) return;
       const md = markdownFromHtml(ed.getHTML());
@@ -181,9 +186,9 @@ export function MarkdownEditor({
   }, [rawMode, editor, value]);
 
   return (
-    <div className={`rounded-lg border border-slate-600 bg-slate-900 ${disabled ? 'opacity-60' : ''}`} data-testid="markdown-editor">
+    <div className={`flex min-h-0 flex-1 flex-col rounded-lg border border-slate-600 bg-slate-900 ${disabled ? 'opacity-60' : ''}`} data-testid="markdown-editor">
       {/* Mode toggle */}
-      <div className="flex items-center justify-between border-b border-slate-700 px-2 py-1">
+      <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-700 px-2 py-1">
         <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
           {rawMode ? 'Markdown' : 'Rich Text'}
         </span>
@@ -209,10 +214,12 @@ export function MarkdownEditor({
           data-testid="markdown-editor-raw"
         />
       ) : (
-        <>
+        <div className="flex min-h-0 flex-1 flex-col">
           <Toolbar editor={editor} />
-          <EditorContent editor={editor} data-testid="markdown-editor-wysiwyg" />
-        </>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <EditorContent editor={editor} data-testid="markdown-editor-wysiwyg" />
+          </div>
+        </div>
       )}
     </div>
   );

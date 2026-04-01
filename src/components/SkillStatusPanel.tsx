@@ -476,7 +476,7 @@ function InstructionsEditor({ teamId, agent, onDirtyChange }: InstructionsEditor
           {filePath}
         </p>
       )}
-      <div data-testid="instructions-textarea" className="min-h-0 flex-1">
+      <div data-testid="instructions-textarea" className="min-h-0 flex-1 flex flex-col">
         <MarkdownEditor
           value={content}
           onChange={handleEditorChange}

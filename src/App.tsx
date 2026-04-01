@@ -29,7 +29,7 @@ function GuardedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
-  const { authConfig, isAuthenticated, isLoading, refreshUser } = useAuth();
+  const { authConfig, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -54,7 +54,7 @@ function AppRoutes() {
             element={
               isAuthenticated
                 ? <Navigate to="/" replace />
-                : <LoginPage authConfig={authConfig!} onLoginSuccess={refreshUser} />
+                : <LoginPage />
             }
           />
           <Route
@@ -63,7 +63,7 @@ function AppRoutes() {
               isAuthenticated
                 ? <Navigate to="/" replace />
                 : authConfig!.registration_enabled
-                  ? <RegisterPage onRegisterSuccess={refreshUser} />
+                  ? <RegisterPage />
                   : <Navigate to="/login" replace />
             }
           />

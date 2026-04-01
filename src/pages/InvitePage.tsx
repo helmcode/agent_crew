@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { InvitePreview, InviteRegisterRequest } from '../types';
 import { authApi } from '../services/api';
-import { setTokens } from '../services/auth';
 import { useAuth } from '../context/AuthContext';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
@@ -10,7 +9,7 @@ import { friendlyError } from '../utils/errors';
 export function InvitePage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const { refreshUser } = useAuth();
+  const { registerWithInvite } = useAuth();
 
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,9 +53,7 @@ export function InvitePage() {
     if (!canSubmit || !token) return;
     setSubmitting(true);
     try {
-      const res = await authApi.registerWithInvite({ ...form, token });
-      setTokens(res.access_token, res.refresh_token);
-      await refreshUser();
+      await registerWithInvite({ ...form, token });
       navigate('/', { replace: true });
     } catch (err) {
       toast('error', friendlyError(err, 'Failed to accept invite. Please try again.'));

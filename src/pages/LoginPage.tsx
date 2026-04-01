@@ -1,17 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { LoginRequest, AuthConfig } from '../types';
-import { authApi } from '../services/api';
-import { setTokens } from '../services/auth';
+import type { LoginRequest } from '../types';
+import { useAuth } from '../context/AuthContext';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
 
-interface LoginPageProps {
-  authConfig: AuthConfig;
-  onLoginSuccess: () => void;
-}
-
-export function LoginPage({ authConfig, onLoginSuccess }: LoginPageProps) {
+export function LoginPage() {
+  const { login, authConfig } = useAuth();
   const [form, setForm] = useState<LoginRequest>({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
 
@@ -20,9 +15,7 @@ export function LoginPage({ authConfig, onLoginSuccess }: LoginPageProps) {
     if (!form.email.trim() || !form.password) return;
     setLoading(true);
     try {
-      const res = await authApi.login(form);
-      setTokens(res.access_token, res.refresh_token);
-      onLoginSuccess();
+      await login(form.email, form.password);
     } catch (err) {
       toast('error', friendlyError(err, 'Login failed. Please check your credentials.'));
     } finally {
@@ -86,7 +79,7 @@ export function LoginPage({ authConfig, onLoginSuccess }: LoginPageProps) {
         </form>
 
         {/* Register link */}
-        {authConfig.registration_enabled && (
+        {authConfig?.registration_enabled && (
           <p className="mt-4 text-center text-sm text-slate-400">
             Don&apos;t have an account?{' '}
             <Link to="/register" className="font-medium text-blue-400 hover:text-blue-300">

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import type { User, Organization, AuthConfig } from '../types';
+import type { User, Organization, AuthConfig, InviteRegisterRequest } from '../types';
 import { authApi } from '../services/api';
 import { setOnAuthFailure } from '../services/api';
 import { setTokens, clearTokens, hasTokens } from '../services/auth';
@@ -13,6 +13,7 @@ interface AuthContextType {
   mustChangePassword: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (orgName: string, name: string, email: string, password: string) => Promise<void>;
+  registerWithInvite: (data: InviteRegisterRequest) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -119,6 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOrganization(res.organization);
   }, []);
 
+  const registerWithInvite = useCallback(async (data: InviteRegisterRequest) => {
+    const res = await authApi.registerWithInvite(data);
+    setTokens(res.access_token, res.refresh_token);
+    setUser(res.user);
+    setOrganization(res.organization);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -130,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         mustChangePassword,
         login,
         register,
+        registerWithInvite,
         logout,
         refreshUser,
       }}

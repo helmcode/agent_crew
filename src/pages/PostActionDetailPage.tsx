@@ -55,6 +55,14 @@ function formatDuration(start: string, end: string | null): string {
   return `${minutes}m ${remainSec}s`;
 }
 
+function sanitizeRunError(error: string | null | undefined): string {
+  if (!error) return '-';
+  let sanitized = error.replace(/\/[\w./-]+/g, '[path]');
+  sanitized = sanitized.replace(/[A-Z]:\\[\w.\\-]+/gi, '[path]');
+  sanitized = sanitized.replace(/\b[A-Za-z0-9+/=_-]{32,}\b/g, '[redacted]');
+  return sanitized;
+}
+
 export function PostActionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -518,7 +526,7 @@ export function PostActionDetailPage() {
                         {formatDuration(run.triggered_at, run.completed_at)}
                       </td>
                       <td className="max-w-xs truncate py-2.5 text-xs text-red-400">
-                        {run.error || '-'}
+                        {sanitizeRunError(run.error)}
                       </td>
                     </tr>
                   );
@@ -552,7 +560,7 @@ export function PostActionDetailPage() {
                     <div>
                       <p className="mb-1 text-[10px] font-medium text-red-400">Error</p>
                       <pre className="overflow-x-auto rounded bg-slate-800 p-2 font-mono text-xs text-red-300">
-                        {run.error}
+                        {sanitizeRunError(run.error)}
                       </pre>
                     </div>
                   )}

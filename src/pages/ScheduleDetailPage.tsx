@@ -7,58 +7,10 @@ import { friendlyError } from '../utils/errors';
 import { cronToHuman } from '../utils/cron';
 import { MarkdownRenderer } from '../components/Markdown';
 import { PostActionBindingsSection } from '../components/PostActionBindingsSection';
-
-const runStatusStyles: Record<string, { bg: string; dot: string; pulse: boolean }> = {
-  running: { bg: 'bg-blue-500/20 text-blue-400', dot: 'bg-blue-400', pulse: true },
-  success: { bg: 'bg-green-500/20 text-green-400', dot: 'bg-green-400', pulse: false },
-  failed: { bg: 'bg-red-500/20 text-red-400', dot: 'bg-red-400', pulse: false },
-  timeout: { bg: 'bg-yellow-500/20 text-yellow-400', dot: 'bg-yellow-400', pulse: false },
-};
+import { formatDateTime, formatDuration, sanitizeRunError, RUN_STATUS_STYLES } from '../utils/format';
 
 const BASE_POLL_INTERVAL = 10_000;
 const MAX_POLL_INTERVAL = 120_000;
-
-/** Strips potential stack traces, file paths, and sensitive data from error messages. */
-function sanitizeRunError(error: string | null | undefined): string {
-  if (!error) return '-';
-
-  // Strip file paths (unix and windows)
-  let sanitized = error.replace(/\/[\w./-]+/g, '[path]');
-  sanitized = sanitized.replace(/[A-Z]:\\[\w.\\-]+/gi, '[path]');
-
-  // Strip anything that looks like an API key or token (long hex/base64 strings)
-  sanitized = sanitized.replace(/\b[A-Za-z0-9+/=_-]{32,}\b/g, '[redacted]');
-
-  // Strip stack trace lines (e.g. "at Function.run (/app/...)")
-  sanitized = sanitized.replace(/\s+at\s+.+/g, '');
-
-  // Truncate to a safe display length
-  const MAX_LEN = 200;
-  if (sanitized.length > MAX_LEN) {
-    sanitized = sanitized.slice(0, MAX_LEN) + '...';
-  }
-
-  return sanitized.trim() || 'Execution failed';
-}
-
-function formatDuration(start: string, end: string | null): string {
-  if (!end) return 'Running...';
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  if (ms < 1000) return `${ms}ms`;
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainSec = seconds % 60;
-  if (minutes < 60) return `${minutes}m ${remainSec}s`;
-  const hours = Math.floor(minutes / 60);
-  const remainMin = minutes % 60;
-  return `${hours}h ${remainMin}m`;
-}
-
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return 'N/A';
-  return new Date(dateStr).toLocaleString();
-}
 
 export function ScheduleDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -339,7 +291,7 @@ export function ScheduleDetailPage() {
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {runs.map((run) => {
-                  const style = runStatusStyles[run.status] ?? runStatusStyles.failed;
+                  const style = RUN_STATUS_STYLES[run.status] ?? RUN_STATUS_STYLES.failed;
                   const isExpanded = expandedRunId === run.id;
                   const hasConversation = run.prompt_sent || run.response_received;
                   return (

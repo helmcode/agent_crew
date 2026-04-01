@@ -15,45 +15,10 @@ import { postActionsApi, webhooksApi, schedulesApi } from '../services/api';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
 
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'bg-green-500/20 text-green-400',
-  POST: 'bg-blue-500/20 text-blue-400',
-  PUT: 'bg-yellow-500/20 text-yellow-400',
-  PATCH: 'bg-orange-500/20 text-orange-400',
-  DELETE: 'bg-red-500/20 text-red-400',
-};
-
-const AUTH_LABELS: Record<string, string> = {
-  none: 'No Auth',
-  bearer: 'Bearer Token',
-  basic: 'Basic Auth',
-  header: 'Custom Header',
-};
-
-const runStatusStyles: Record<string, { bg: string; dot: string; pulse: boolean }> = {
-  success: { bg: 'bg-green-500/20 text-green-400', dot: 'bg-green-400', pulse: false },
-  failed: { bg: 'bg-red-500/20 text-red-400', dot: 'bg-red-400', pulse: false },
-  retrying: { bg: 'bg-yellow-500/20 text-yellow-400', dot: 'bg-yellow-400', pulse: true },
-};
+import { formatDateTime, formatDuration, RUN_STATUS_STYLES, METHOD_COLORS, AUTH_LABELS } from '../utils/format';
 
 const BASE_POLL_INTERVAL = 10_000;
 const MAX_POLL_INTERVAL = 120_000;
-
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return 'N/A';
-  return new Date(dateStr).toLocaleString();
-}
-
-function formatDuration(start: string, end: string | null): string {
-  if (!end) return 'Running...';
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  if (ms < 1000) return `${ms}ms`;
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainSec = seconds % 60;
-  return `${minutes}m ${remainSec}s`;
-}
 
 export function PostActionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -480,7 +445,7 @@ export function PostActionDetailPage() {
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {runs.map((run) => {
-                  const style = runStatusStyles[run.status] ?? runStatusStyles.failed;
+                  const style = RUN_STATUS_STYLES[run.status] ?? RUN_STATUS_STYLES.failed;
                   const isExpanded = expandedRunId === run.id;
                   const hasDetails = run.request_sent || run.response_body || run.error;
                   return (

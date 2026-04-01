@@ -1,4 +1,4 @@
-import type { Team, Agent, TaskLog, Setting } from '../types';
+import type { Team, Agent, TaskLog, Setting, Document } from '../types';
 
 export const mockTeam: Team = {
   id: 'team-uuid-1',
@@ -123,6 +123,49 @@ export const mockActivityEventLog: TaskLog = {
     timestamp: '2026-01-01T00:00:05Z',
   },
   created_at: '2026-01-01T00:00:05Z',
+};
+
+export const mockDocument: Document = {
+  id: 'doc-uuid-1',
+  org_id: 'org-uuid-1',
+  name: 'architecture.pdf',
+  file_name: 'architecture.pdf',
+  file_size: 1048576,
+  mime_type: 'application/pdf',
+  storage_path: '/data/knowledge/org-uuid-1/doc-uuid-1/architecture.pdf',
+  status: 'ready',
+  status_message: '',
+  chunk_count: 42,
+  created_at: '2026-03-15T10:00:00Z',
+  updated_at: '2026-03-15T10:01:00Z',
+};
+
+export const mockProcessingDocument: Document = {
+  ...mockDocument,
+  id: 'doc-uuid-2',
+  name: 'api-spec.md',
+  file_name: 'api-spec.md',
+  file_size: 25600,
+  mime_type: 'text/markdown',
+  status: 'processing',
+  status_message: '',
+  chunk_count: 0,
+  created_at: '2026-03-15T11:00:00Z',
+  updated_at: '2026-03-15T11:00:00Z',
+};
+
+export const mockErrorDocument: Document = {
+  ...mockDocument,
+  id: 'doc-uuid-3',
+  name: 'corrupted.xlsx',
+  file_name: 'corrupted.xlsx',
+  file_size: 512000,
+  mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  status: 'error',
+  status_message: 'Failed to parse spreadsheet: invalid format',
+  chunk_count: 0,
+  created_at: '2026-03-15T12:00:00Z',
+  updated_at: '2026-03-15T12:00:30Z',
 };
 
 export function createFetchMock(responses: Record<string, { status?: number; body?: unknown }>) {

@@ -48,6 +48,7 @@ import type {
   CreateInviteRequest,
   ResetPasswordResponse,
   OllamaStatus,
+  Document,
 } from '../types';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from './auth';
 
@@ -436,6 +437,67 @@ export const postActionsApi = {
   // Runs
   runs: (id: string) =>
     request<PaginatedResponse<PostActionRun>>(`/api/post-actions/${id}/runs`),
+};
+
+// Knowledge Base
+export const knowledgeApi = {
+  list: () => request<Document[]>('/api/knowledge/documents'),
+  get: (id: string) => request<Document>(`/api/knowledge/documents/${id}`),
+  upload: async (file: File, name?: string): Promise<Document> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (name) formData.append('name', name);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 120_000);
+    try {
+      const headers: Record<string, string> = {};
+      const token = getAccessToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`${API_URL}/api/knowledge/documents`, {
+        method: 'POST',
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
+
+      if (res.status === 401) {
+        const refreshed = await handleTokenRefresh();
+        if (refreshed) {
+          return knowledgeApi.upload(file, name);
+        }
+        clearTokens();
+        onAuthFailure?.();
+        throw new Error('Session expired');
+      }
+
+      if (!res.ok) {
+        const body = await res.text();
+        let message = `Request failed: ${res.status}`;
+        if (body) {
+          try {
+            const json = JSON.parse(body);
+            message = json.error || json.message || body;
+          } catch {
+            message = body;
+          }
+        }
+        throw new Error(message);
+      }
+      return res.json();
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error('Upload timed out');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+  delete: (id: string) =>
+    request<void>(`/api/knowledge/documents/${id}`, { method: 'DELETE' }),
 };
 
 // Ollama

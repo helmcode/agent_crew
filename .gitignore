@@ -7,3 +7,9 @@ dist
 *.tsbuildinfo
 playwright-report/
 test-results/
+
+# Playwright MCP logs
+.playwright-mcp/
+
+# QoS screenshots
+qos-*.png

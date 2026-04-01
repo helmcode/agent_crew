@@ -21,6 +21,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { InvitePage } from './pages/InvitePage';
 import { UserProfilePage } from './pages/UserProfilePage';
 import { OrgSettingsPage } from './pages/OrgSettingsPage';
+import { KnowledgeBasePage } from './pages/KnowledgeBasePage';
 
 function GuardedRoute({ children }: { children: React.ReactNode }) {
   const { mustChangePassword } = useAuth();
@@ -91,6 +92,7 @@ function AppRoutes() {
         <Route path="/post-actions" element={<GuardedRoute><PostActionsListPage /></GuardedRoute>} />
         <Route path="/post-actions/new" element={<GuardedRoute><PostActionBuilderPage /></GuardedRoute>} />
         <Route path="/post-actions/:id" element={<GuardedRoute><PostActionDetailPage /></GuardedRoute>} />
+        <Route path="/knowledge" element={<GuardedRoute><KnowledgeBasePage /></GuardedRoute>} />
         <Route path="/settings" element={<GuardedRoute><SettingsPage /></GuardedRoute>} />
         <Route path="/settings/profile" element={<UserProfilePage />} />
         <Route path="/settings/organization" element={<GuardedRoute><OrgSettingsPage /></GuardedRoute>} />

@@ -514,6 +514,25 @@ export interface UpdateBindingRequest {
   enabled?: boolean;
 }
 
+// Knowledge Base / Documents
+
+export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'error';
+
+export interface Document {
+  id: string;
+  org_id: string;
+  name: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  storage_path: string;
+  status: DocumentStatus;
+  status_message: string;
+  chunk_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // Ollama
 
 export interface OllamaStatus {

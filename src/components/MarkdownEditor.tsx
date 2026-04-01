@@ -27,11 +27,19 @@ turndown.addRule('lineBreak', {
 });
 
 function htmlFromMarkdown(md: string): string {
-  return marked.parse(md, { async: false }) as string;
+  try {
+    return marked.parse(md, { async: false }) as string;
+  } catch {
+    return `<p>${md}</p>`;
+  }
 }
 
 function markdownFromHtml(html: string): string {
-  return turndown.turndown(html);
+  try {
+    return turndown.turndown(html);
+  } catch {
+    return html;
+  }
 }
 
 
@@ -42,6 +50,10 @@ interface ToolbarProps {
 function Toolbar({ editor }: ToolbarProps) {
   if (!editor) return null;
 
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const linkInputRef = useRef<HTMLInputElement>(null);
+
   const btnClass = (active: boolean) =>
     `rounded px-1.5 py-1 text-xs font-medium transition-colors ${
       active
@@ -49,12 +61,27 @@ function Toolbar({ editor }: ToolbarProps) {
         : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
     }`;
 
-  const addLink = useCallback(() => {
-    const url = window.prompt('URL:');
+  const openLinkPopover = useCallback(() => {
+    setLinkUrl(editor.getAttributes('link').href ?? '');
+    setLinkOpen(true);
+    setTimeout(() => linkInputRef.current?.focus(), 0);
+  }, [editor]);
+
+  const applyLink = useCallback(() => {
+    const url = linkUrl.trim();
     if (url) {
       editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    } else {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
     }
-  }, [editor]);
+    setLinkOpen(false);
+    setLinkUrl('');
+  }, [editor, linkUrl]);
+
+  const cancelLink = useCallback(() => {
+    setLinkOpen(false);
+    setLinkUrl('');
+  }, []);
 
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-700 bg-slate-800 px-2 py-1.5 rounded-t-lg">
@@ -94,11 +121,38 @@ function Toolbar({ editor }: ToolbarProps) {
       <button type="button" onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={btnClass(editor.isActive('codeBlock'))} title="Code Block">
         &lt;/&gt;
       </button>
-      <button type="button" onClick={addLink} className={btnClass(editor.isActive('link'))} title="Link">
-        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-        </svg>
-      </button>
+
+      {/* Link button with inline popover */}
+      <div className="relative">
+        <button type="button" onClick={openLinkPopover} className={btnClass(editor.isActive('link'))} title="Link">
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+        </button>
+        {linkOpen && (
+          <div className="absolute left-0 top-full z-10 mt-1 flex items-center gap-1 rounded-lg border border-slate-600 bg-slate-800 p-2 shadow-lg">
+            <input
+              ref={linkInputRef}
+              type="url"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); applyLink(); }
+                if (e.key === 'Escape') cancelLink();
+              }}
+              placeholder="https://..."
+              className="w-52 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+            />
+            <button type="button" onClick={applyLink} className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500">
+              Apply
+            </button>
+            <button type="button" onClick={cancelLink} className="rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-700">
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+
       <button type="button" onClick={() => editor.chain().focus().setHorizontalRule().run()} className={btnClass(false)} title="Horizontal Rule">
         &#8213;
       </button>
@@ -134,7 +188,9 @@ export function MarkdownEditor({
     onCreate: ({ editor: ed }) => {
       const md = markdownFromHtml(ed.getHTML());
       lastEmitted.current = md;
-      onChange(md);
+      // Only emit if normalization changed the value — avoids spurious re-renders
+      // on mount when the parent already has the correct markdown
+      if (md !== value) onChange(md);
     },
     onUpdate: ({ editor: ed }) => {
       if (isSyncing.current) return;

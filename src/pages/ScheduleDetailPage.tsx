@@ -130,6 +130,7 @@ export function ScheduleDetailPage() {
       fetchSchedule();
     } catch (err) {
       toast('error', friendlyError(err, 'Failed to toggle schedule.'));
+      fetchSchedule();
     } finally {
       setTogglingEnabled(false);
     }

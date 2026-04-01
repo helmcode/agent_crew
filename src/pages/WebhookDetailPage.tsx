@@ -129,6 +129,7 @@ export function WebhookDetailPage() {
       fetchWebhook();
     } catch (err) {
       toast('error', friendlyError(err, 'Failed to toggle webhook.'));
+      fetchWebhook();
     } finally {
       setTogglingEnabled(false);
     }

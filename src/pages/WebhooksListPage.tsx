@@ -70,6 +70,7 @@ export function WebhooksListPage() {
       fetchWebhooks();
     } catch (err) {
       toast('error', friendlyError(err, 'Failed to toggle webhook.'));
+      fetchWebhooks();
     } finally {
       setTogglingId(null);
     }

@@ -135,10 +135,12 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
     });
 
     // Handle 401 with token refresh (only for authenticated requests)
-    if (res.status === 401 && !options?._skipAuth && !options?._retried) {
-      const refreshed = await handleTokenRefresh();
-      if (refreshed) {
-        return request<T>(path, { ...options, _retried: true });
+    if (res.status === 401 && !options?._skipAuth) {
+      if (!options?._retried) {
+        const refreshed = await handleTokenRefresh();
+        if (refreshed) {
+          return request<T>(path, { ...options, _retried: true });
+        }
       }
       clearTokens();
       onAuthFailure?.();
@@ -275,10 +277,12 @@ async function sendChatMultipart(
       signal: controller.signal,
     });
 
-    if (res.status === 401 && !retried) {
-      const refreshed = await handleTokenRefresh();
-      if (refreshed) {
-        return sendChatMultipart(teamId, data, files, true);
+    if (res.status === 401) {
+      if (!retried) {
+        const refreshed = await handleTokenRefresh();
+        if (refreshed) {
+          return sendChatMultipart(teamId, data, files, true);
+        }
       }
       clearTokens();
       onAuthFailure?.();

@@ -247,64 +247,73 @@ export const agentsApi = {
     ),
 };
 
+async function sendChatMultipart(
+  teamId: string,
+  data: ChatRequest,
+  files: File[],
+  retried = false,
+): Promise<ChatResponse> {
+  const formData = new FormData();
+  formData.append('message', data.message);
+  for (const file of files) {
+    formData.append('files', file);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const headers: Record<string, string> = {};
+    const token = getAccessToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    // Do NOT set Content-Type — let browser set multipart boundary
+    const res = await fetch(`${API_URL}/api/teams/${teamId}/chat`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      signal: controller.signal,
+    });
+
+    if (res.status === 401 && !retried) {
+      const refreshed = await handleTokenRefresh();
+      if (refreshed) {
+        return sendChatMultipart(teamId, data, files, true);
+      }
+      clearTokens();
+      onAuthFailure?.();
+      throw new Error('Session expired');
+    }
+
+    if (!res.ok) {
+      const body = await res.text();
+      let message = `Request failed: ${res.status}`;
+      if (body) {
+        try {
+          const json = JSON.parse(body);
+          message = json.error || json.message || body;
+        } catch {
+          message = body;
+        }
+      }
+      throw new Error(message);
+    }
+    return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Request timed out');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Chat & Messages
 export const chatApi = {
   send: async (teamId: string, data: ChatRequest, files?: File[]): Promise<ChatResponse> => {
     if (files && files.length > 0) {
-      const formData = new FormData();
-      formData.append('message', data.message);
-      for (const file of files) {
-        formData.append('files', file);
-      }
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-      try {
-        const headers: Record<string, string> = {};
-        const token = getAccessToken();
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        // Do NOT set Content-Type — let browser set multipart boundary
-        const res = await fetch(`${API_URL}/api/teams/${teamId}/chat`, {
-          method: 'POST',
-          headers,
-          body: formData,
-          signal: controller.signal,
-        });
-
-        if (res.status === 401) {
-          const refreshed = await handleTokenRefresh();
-          if (refreshed) {
-            return chatApi.send(teamId, data, files);
-          }
-          clearTokens();
-          onAuthFailure?.();
-          throw new Error('Session expired');
-        }
-
-        if (!res.ok) {
-          const body = await res.text();
-          let message = `Request failed: ${res.status}`;
-          if (body) {
-            try {
-              const json = JSON.parse(body);
-              message = json.error || json.message || body;
-            } catch {
-              message = body;
-            }
-          }
-          throw new Error(message);
-        }
-        return res.json();
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          throw new Error('Request timed out');
-        }
-        throw err;
-      } finally {
-        clearTimeout(timer);
-      }
+      return sendChatMultipart(teamId, data, files);
     }
 
     return request<ChatResponse>(`/api/teams/${teamId}/chat`, {

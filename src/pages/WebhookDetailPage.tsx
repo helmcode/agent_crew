@@ -64,6 +64,10 @@ export function WebhookDetailPage() {
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const consecutiveFailures = useRef(0);
   const pollTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Tracks whether this is the first fetch — avoids adding `loading` to
+  // useCallback deps, which would recreate the callback on every state change
+  // and trigger the useEffect repeatedly, spawning multiple poll timers.
+  const isInitialLoad = useRef(true);
 
   // Regenerate token state
   const [regenerateConfirm, setRegenerateConfirm] = useState(false);
@@ -81,15 +85,16 @@ export function WebhookDetailPage() {
       setWebhook(data);
       consecutiveFailures.current = 0;
     } catch (err) {
-      if (loading) {
+      if (isInitialLoad.current) {
         toast('error', friendlyError(err, 'Failed to load webhook.'));
         navigate('/webhooks');
       }
       consecutiveFailures.current += 1;
     } finally {
+      isInitialLoad.current = false;
       setLoading(false);
     }
-  }, [id, navigate, loading]);
+  }, [id, navigate]);
 
   const fetchRuns = useCallback(async () => {
     if (!id) return;

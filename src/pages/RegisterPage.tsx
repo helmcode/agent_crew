@@ -1,16 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { RegisterRequest } from '../types';
-import { authApi } from '../services/api';
-import { setTokens } from '../services/auth';
+import { useAuth } from '../context/AuthContext';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
 
-interface RegisterPageProps {
-  onRegisterSuccess: () => void;
-}
-
-export function RegisterPage({ onRegisterSuccess }: RegisterPageProps) {
+export function RegisterPage() {
+  const { register } = useAuth();
   const [form, setForm] = useState<RegisterRequest>({
     org_name: '',
     name: '',
@@ -40,9 +36,7 @@ export function RegisterPage({ onRegisterSuccess }: RegisterPageProps) {
     if (!canSubmit) return;
     setLoading(true);
     try {
-      const res = await authApi.register(form);
-      setTokens(res.access_token, res.refresh_token);
-      onRegisterSuccess();
+      await register(form.org_name, form.name, form.email, form.password);
     } catch (err) {
       toast('error', friendlyError(err, 'Registration failed. Please try again.'));
     } finally {

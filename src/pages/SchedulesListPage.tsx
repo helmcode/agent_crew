@@ -74,6 +74,7 @@ export function SchedulesListPage() {
       fetchSchedules();
     } catch (err) {
       toast('error', friendlyError(err, 'Failed to toggle schedule.'));
+      fetchSchedules();
     } finally {
       setTogglingId(null);
     }

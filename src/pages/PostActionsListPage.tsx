@@ -56,6 +56,7 @@ export function PostActionsListPage() {
       fetchActions();
     } catch (err) {
       toast('error', friendlyError(err, 'Failed to toggle post-action.'));
+      fetchActions();
     } finally {
       setTogglingId(null);
     }

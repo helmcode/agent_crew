@@ -17,7 +17,10 @@ export async function copyToClipboard(text: string): Promise<void> {
   document.body.appendChild(textarea);
   textarea.select();
   try {
-    document.execCommand('copy');
+    const success = document.execCommand('copy');
+    if (!success) {
+      throw new Error('execCommand copy failed');
+    }
   } finally {
     document.body.removeChild(textarea);
   }

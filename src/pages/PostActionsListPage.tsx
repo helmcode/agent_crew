@@ -6,21 +6,7 @@ import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { EmptyState } from '../components/EmptyState';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'bg-green-500/20 text-green-400',
-  POST: 'bg-blue-500/20 text-blue-400',
-  PUT: 'bg-yellow-500/20 text-yellow-400',
-  PATCH: 'bg-orange-500/20 text-orange-400',
-  DELETE: 'bg-red-500/20 text-red-400',
-};
-
-const AUTH_LABELS: Record<string, string> = {
-  none: 'No Auth',
-  bearer: 'Bearer',
-  basic: 'Basic',
-  header: 'Custom Header',
-};
+import { METHOD_COLORS, AUTH_LABELS } from '../utils/format';
 
 export function PostActionsListPage() {
   const [actions, setActions] = useState<PostAction[]>([]);

@@ -7,6 +7,7 @@ import { EmptyState } from '../components/EmptyState';
 import { toast } from '../components/Toast';
 import { friendlyError } from '../utils/errors';
 import { cronToHuman } from '../utils/cron';
+import { formatRelativeTime } from '../utils/format';
 
 function scheduleStatusColor(schedule: Schedule): { bg: string; dot: string; pulse: boolean; label: string } {
   if (schedule.status === 'running') {
@@ -19,25 +20,6 @@ function scheduleStatusColor(schedule: Schedule): { bg: string; dot: string; pul
     return { bg: 'bg-slate-500/20 text-slate-400', dot: 'bg-slate-400', pulse: false, label: 'disabled' };
   }
   return { bg: 'bg-green-500/20 text-green-400', dot: 'bg-green-400', pulse: false, label: 'idle' };
-}
-
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return 'Never';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = date.getTime() - now.getTime();
-  const absDiffMs = Math.abs(diffMs);
-
-  if (absDiffMs < 60_000) return diffMs > 0 ? 'in < 1m' : '< 1m ago';
-
-  const minutes = Math.floor(absDiffMs / 60_000);
-  if (minutes < 60) return diffMs > 0 ? `in ${minutes}m` : `${minutes}m ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return diffMs > 0 ? `in ${hours}h` : `${hours}h ago`;
-
-  const days = Math.floor(hours / 24);
-  return diffMs > 0 ? `in ${days}d` : `${days}d ago`;
 }
 
 export function SchedulesListPage() {
